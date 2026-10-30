@@ -1,0 +1,28 @@
+[project]
+name = "taskboard-api"
+version = "0.1.0"
+description = "Trello-style task board API built with FastAPI and SQLAlchemy."
+authors = [
+    { name = "Lan Tran", email = "lan.tran@asnet.com.vn" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.162.0",
+    "pydantic-settings>=2.16.2",
+    "sqlalchemy>=2.1.6",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.16.0",
+    "pytest>=9.2.0",
+    "ruff>=0.17.3",
+]
+
+[tool.ruff.lint]
+extend-select = ["I", "B", "UP"]
+extend-ignore = ["B008"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

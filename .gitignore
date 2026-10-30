@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.python-version
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables
+.env
+.env.*
+
+# Keep example environment file
+!.env.example
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Type checking
+.mypy_cache/
+.pyre/
+
+# Ruff
+.ruff_cache/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+
+# Build
+build/
+dist/
+*.egg-info/
+
+# Alembic
+# Do not ignore migration files.
+
+# SQLite
+*.db
