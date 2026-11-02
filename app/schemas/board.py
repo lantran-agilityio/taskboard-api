@@ -1,19 +1,16 @@
 from datetime import datetime
-from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, StringConstraints
+from pydantic import BaseModel, ConfigDict
 
-BoardName = Annotated[
-    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)
-]
+from app.schemas.common import Name
 
 
 class BoardCreate(BaseModel):
-    name: BoardName
+    name: Name
 
 
 class BoardUpdate(BaseModel):
-    name: BoardName
+    name: Name
 
 
 class BoardRead(BaseModel):

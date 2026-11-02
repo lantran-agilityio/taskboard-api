@@ -25,5 +25,5 @@ uv run ruff check .
 3. Cards inside a list, with an order; move cards between lists
 4. Users and JWT authentication; boards belong to users
 5. Board members and permissions
-6. Alembic migrations, PostgreSQL
+6. Alembic migrations, PostgreSQL; protect positions against concurrent requests (row locks, unique `(board_id, position)`)
 7. Realtime board updates over WebSocket
