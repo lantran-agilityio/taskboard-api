@@ -3,6 +3,7 @@ from collections.abc import Sequence
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.api.deps import CurrentUser
 from app.api.errors import body_validation_error
 from app.api.routes.boards import get_board_or_404
 from app.core.database import get_db
@@ -17,9 +18,11 @@ board_lists_router = APIRouter(prefix="/boards/{board_id}/lists", tags=["lists"]
 router = APIRouter(prefix="/lists", tags=["lists"])
 
 
-def get_list_or_404(list_id: int, db: Session = Depends(get_db)) -> BoardList:
+def get_list_or_404(
+    list_id: int, user: CurrentUser, db: Session = Depends(get_db)
+) -> BoardList:
     board_list = db.get(BoardList, list_id)
-    if board_list is None:
+    if board_list is None or board_list.board.owner_id != user.id:
         raise HTTPException(status_code=404, detail="List not found")
     return board_list
 

@@ -3,6 +3,7 @@ from collections.abc import Sequence
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.api.deps import CurrentUser
 from app.api.errors import body_validation_error
 from app.api.routes.lists import get_list_or_404
 from app.core.database import get_db
@@ -17,9 +18,11 @@ list_cards_router = APIRouter(prefix="/lists/{list_id}/cards", tags=["cards"])
 router = APIRouter(prefix="/cards", tags=["cards"])
 
 
-def get_card_or_404(card_id: int, db: Session = Depends(get_db)) -> Card:
+def get_card_or_404(
+    card_id: int, user: CurrentUser, db: Session = Depends(get_db)
+) -> Card:
     card = db.get(Card, card_id)
-    if card is None:
+    if card is None or card.board_list.board.owner_id != user.id:
         raise HTTPException(status_code=404, detail="Card not found")
     return card
 

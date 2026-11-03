@@ -420,3 +420,64 @@ def test_delete_board_deletes_its_cards(client: TestClient) -> None:
     assert client.delete(f"/boards/{board['id']}").status_code == 204
 
     assert client.get(f"/cards/{card['id']}").status_code == 404
+
+
+# Ownership
+
+
+@pytest.mark.parametrize(
+    ("method", "json"),
+    [("POST", {"title": "Hacked"}), ("GET", None)],
+)
+def test_other_users_list_cards_return_404(
+    client: TestClient, other_headers: dict, method: str, json: dict | None
+) -> None:
+    list_id, _ = list_with_cards(client, "A")
+
+    response = client.request(
+        method, f"/lists/{list_id}/cards", json=json, headers=other_headers
+    )
+
+    assert response.status_code == 404
+    assert card_titles(client, list_id) == ["A"]
+
+
+@pytest.mark.parametrize(
+    ("method", "json"),
+    [("GET", None), ("PATCH", {"title": "Hacked"}), ("DELETE", None)],
+)
+def test_other_users_card_returns_404(
+    client: TestClient, other_headers: dict, method: str, json: dict | None
+) -> None:
+    list_id, cards = list_with_cards(client, "A")
+
+    response = client.request(
+        method, f"/cards/{cards['A']['id']}", json=json, headers=other_headers
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Card not found"}
+    assert card_titles(client, list_id) == ["A"]
+
+
+def test_move_card_to_other_users_list_returns_422(
+    client: TestClient, other_headers: dict
+) -> None:
+    list_id, cards = list_with_cards(client, "A")
+    bob_board = client.post(
+        "/boards", json={"name": "Bob's"}, headers=other_headers
+    ).json()
+    bob_list = client.post(
+        f"/boards/{bob_board['id']}/lists",
+        json={"name": "Bob's"},
+        headers=other_headers,
+    ).json()
+
+    response = client.patch(
+        f"/cards/{cards['A']['id']}", json={"list_id": bob_list["id"]}
+    )
+
+    assert response.status_code == 422
+    assert card_titles(client, list_id) == ["A"]
+    bob_cards = client.get(f"/lists/{bob_list['id']}/cards", headers=other_headers)
+    assert bob_cards.json() == []

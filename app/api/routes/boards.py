@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.deps import CurrentUser
 from app.core.database import get_db
 from app.models.board import Board
 from app.schemas.board import BoardCreate, BoardRead, BoardUpdate
@@ -11,16 +12,21 @@ from app.schemas.board import BoardCreate, BoardRead, BoardUpdate
 router = APIRouter(prefix="/boards", tags=["boards"])
 
 
-def get_board_or_404(board_id: int, db: Session = Depends(get_db)) -> Board:
+def get_board_or_404(
+    board_id: int, user: CurrentUser, db: Session = Depends(get_db)
+) -> Board:
     board = db.get(Board, board_id)
-    if board is None:
+    # Someone else's board is reported as missing, so its existence stays hidden.
+    if board is None or board.owner_id != user.id:
         raise HTTPException(status_code=404, detail="Board not found")
     return board
 
 
 @router.post("", response_model=BoardRead, status_code=status.HTTP_201_CREATED)
-def create_board(payload: BoardCreate, db: Session = Depends(get_db)) -> Board:
-    board = Board(name=payload.name)
+def create_board(
+    payload: BoardCreate, user: CurrentUser, db: Session = Depends(get_db)
+) -> Board:
+    board = Board(name=payload.name, owner=user)
     db.add(board)
     db.commit()
     db.refresh(board)
@@ -28,8 +34,10 @@ def create_board(payload: BoardCreate, db: Session = Depends(get_db)) -> Board:
 
 
 @router.get("", response_model=list[BoardRead])
-def list_boards(db: Session = Depends(get_db)) -> Sequence[Board]:
-    return db.scalars(select(Board).order_by(Board.id)).all()
+def list_boards(user: CurrentUser, db: Session = Depends(get_db)) -> Sequence[Board]:
+    return db.scalars(
+        select(Board).where(Board.owner_id == user.id).order_by(Board.id)
+    ).all()
 
 
 @router.get("/{board_id}", response_model=BoardRead)

@@ -129,3 +129,35 @@ def test_delete_missing_board_returns_404(client: TestClient) -> None:
     response = client.delete("/boards/999")
 
     assert response.status_code == 404
+
+
+# Ownership
+
+
+def test_list_boards_only_returns_your_own(
+    client: TestClient, other_headers: dict
+) -> None:
+    create_board(client, "Alice's")
+    client.post("/boards", json={"name": "Bob's"}, headers=other_headers)
+
+    response = client.get("/boards")
+
+    assert [board["name"] for board in response.json()] == ["Alice's"]
+
+
+@pytest.mark.parametrize(
+    ("method", "json"),
+    [("GET", None), ("PATCH", {"name": "Hacked"}), ("DELETE", None)],
+)
+def test_other_users_board_returns_404(
+    client: TestClient, other_headers: dict, method: str, json: dict | None
+) -> None:
+    board = create_board(client)
+
+    response = client.request(
+        method, f"/boards/{board['id']}", json=json, headers=other_headers
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Board not found"}
+    assert client.get(f"/boards/{board['id']}").json() == board
