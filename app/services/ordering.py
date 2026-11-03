@@ -25,3 +25,23 @@ def move_item[T: Positioned](items: Sequence[T], item: T, new_position: int) -> 
     others.insert(new_position, item)
     for index, other in enumerate(others):
         other.position = index
+
+
+def transfer_item[T: Positioned](
+    source: Sequence[T], target: Sequence[T], item: T, new_position: int
+) -> None:
+    """Move item from source to new_position in target, renumbering both.
+
+    Only positions change: the caller moves the item to its new parent.
+    """
+    if not any(other is item for other in source):
+        raise ValueError("Item is not in the source sequence")
+    if any(other is item for other in target):
+        raise ValueError("Item is already in the target sequence")
+    if not 0 <= new_position <= len(target):
+        raise ValueError(f"Position must be between 0 and {len(target)}")
+    renumber([other for other in source if other is not item])
+    others = sorted(target, key=lambda other: other.position)
+    others.insert(new_position, item)
+    for index, other in enumerate(others):
+        other.position = index

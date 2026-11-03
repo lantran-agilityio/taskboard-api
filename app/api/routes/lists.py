@@ -1,9 +1,9 @@
 from collections.abc import Sequence
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.exceptions import RequestValidationError
 from sqlalchemy.orm import Session
 
+from app.api.errors import body_validation_error
 from app.api.routes.boards import get_board_or_404
 from app.core.database import get_db
 from app.models.board import Board
@@ -61,15 +61,8 @@ def update_list(
         try:
             move_item(board_list.board.lists, board_list, payload.position)
         except ValueError as error:
-            raise RequestValidationError(
-                [
-                    {
-                        "type": "value_error",
-                        "loc": ("body", "position"),
-                        "msg": str(error),
-                        "input": payload.position,
-                    }
-                ]
+            raise body_validation_error(
+                "position", str(error), payload.position
             ) from error
     if payload.name is not None:
         board_list.name = payload.name
