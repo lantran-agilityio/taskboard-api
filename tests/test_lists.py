@@ -278,3 +278,41 @@ def test_move_list_needs_a_real_integer(client: TestClient, position: object) ->
 
     assert response.status_code == 422
     assert list_names(client, board_id) == ["A", "B"]
+
+
+# Ownership
+
+
+@pytest.mark.parametrize(
+    ("method", "json"),
+    [("POST", {"name": "Hacked"}), ("GET", None)],
+)
+def test_other_users_board_lists_return_404(
+    client: TestClient, other_headers: dict, method: str, json: dict | None
+) -> None:
+    board_id, _ = board_with_lists(client, "A")
+
+    response = client.request(
+        method, f"/boards/{board_id}/lists", json=json, headers=other_headers
+    )
+
+    assert response.status_code == 404
+    assert list_names(client, board_id) == ["A"]
+
+
+@pytest.mark.parametrize(
+    ("method", "json"),
+    [("GET", None), ("PATCH", {"name": "Hacked", "position": 1}), ("DELETE", None)],
+)
+def test_other_users_list_returns_404(
+    client: TestClient, other_headers: dict, method: str, json: dict | None
+) -> None:
+    board_id, lists = board_with_lists(client, "A", "B")
+
+    response = client.request(
+        method, f"/lists/{lists['A']['id']}", json=json, headers=other_headers
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "List not found"}
+    assert list_names(client, board_id) == ["A", "B"]

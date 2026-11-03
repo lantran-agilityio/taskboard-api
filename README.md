@@ -6,10 +6,11 @@ A Trello-style task board API built with FastAPI and SQLAlchemy: boards, lists a
 
 ```sh
 uv sync
+cp .env.example .env   # then set SECRET_KEY
 uv run uvicorn app.main:app --reload
 ```
 
-Open http://127.0.0.1:8000/docs to try the API.
+Open http://127.0.0.1:8000/docs to try the API: register with `POST /auth/register`, then click **Authorize** and log in with your email and password.
 
 ## Test
 
