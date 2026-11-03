@@ -1,13 +1,11 @@
 from collections.abc import Sequence
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import CurrentUser
+from app.api.access import EditableBoard, EditableList, ViewableBoard, ViewableList
 from app.api.errors import body_validation_error
-from app.api.routes.boards import get_board_or_404
 from app.core.database import get_db
-from app.models.board import Board
 from app.models.board_list import BoardList
 from app.schemas.board_list import ListCreate, ListRead, ListUpdate
 from app.services.ordering import move_item, renumber
@@ -18,21 +16,12 @@ board_lists_router = APIRouter(prefix="/boards/{board_id}/lists", tags=["lists"]
 router = APIRouter(prefix="/lists", tags=["lists"])
 
 
-def get_list_or_404(
-    list_id: int, user: CurrentUser, db: Session = Depends(get_db)
-) -> BoardList:
-    board_list = db.get(BoardList, list_id)
-    if board_list is None or board_list.board.owner_id != user.id:
-        raise HTTPException(status_code=404, detail="List not found")
-    return board_list
-
-
 @board_lists_router.post(
     "", response_model=ListRead, status_code=status.HTTP_201_CREATED
 )
 def create_list(
     payload: ListCreate,
-    board: Board = Depends(get_board_or_404),
+    board: EditableBoard,
     db: Session = Depends(get_db),
 ) -> BoardList:
     position = max((item.position for item in board.lists), default=-1) + 1
@@ -44,19 +33,19 @@ def create_list(
 
 
 @board_lists_router.get("", response_model=list[ListRead])
-def list_lists(board: Board = Depends(get_board_or_404)) -> Sequence[BoardList]:
+def list_lists(board: ViewableBoard) -> Sequence[BoardList]:
     return board.lists
 
 
 @router.get("/{list_id}", response_model=ListRead)
-def get_list(board_list: BoardList = Depends(get_list_or_404)) -> BoardList:
+def get_list(board_list: ViewableList) -> BoardList:
     return board_list
 
 
 @router.patch("/{list_id}", response_model=ListRead)
 def update_list(
     payload: ListUpdate,
-    board_list: BoardList = Depends(get_list_or_404),
+    board_list: EditableList,
     db: Session = Depends(get_db),
 ) -> BoardList:
     # Move first: if the position is invalid, nothing has changed yet.
@@ -75,9 +64,7 @@ def update_list(
 
 
 @router.delete("/{list_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_list(
-    board_list: BoardList = Depends(get_list_or_404), db: Session = Depends(get_db)
-) -> None:
+def delete_list(board_list: EditableList, db: Session = Depends(get_db)) -> None:
     board = board_list.board
     board.lists.remove(board_list)  # delete-orphan deletes it on commit
     renumber(board.lists)
