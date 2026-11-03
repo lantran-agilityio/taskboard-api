@@ -8,6 +8,7 @@ from app.core.database import Base
 
 if TYPE_CHECKING:
     from app.models.board import Board
+    from app.models.board_member import BoardMember
 
 
 class User(Base):
@@ -20,4 +21,7 @@ class User(Base):
 
     boards: Mapped[list["Board"]] = relationship(
         back_populates="owner", cascade="all, delete-orphan"
+    )
+    memberships: Mapped[list["BoardMember"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
     )

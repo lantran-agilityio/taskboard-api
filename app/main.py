@@ -11,6 +11,7 @@ from app.api.routes.cards import router as cards_router
 from app.api.routes.health import router as health_router
 from app.api.routes.lists import board_lists_router
 from app.api.routes.lists import router as lists_router
+from app.api.routes.members import router as members_router
 from app.core.config import settings
 from app.core.database import Base, engine
 
@@ -33,6 +34,7 @@ app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(boards_router)
+app.include_router(members_router)
 app.include_router(board_lists_router)
 app.include_router(lists_router)
 app.include_router(list_cards_router)

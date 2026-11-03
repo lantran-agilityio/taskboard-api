@@ -1,11 +1,10 @@
 from collections.abc import Sequence
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import CurrentUser
+from app.api.access import EditableCard, EditableList, ViewableCard, ViewableList
 from app.api.errors import body_validation_error
-from app.api.routes.lists import get_list_or_404
 from app.core.database import get_db
 from app.models.board_list import BoardList
 from app.models.card import Card
@@ -18,21 +17,12 @@ list_cards_router = APIRouter(prefix="/lists/{list_id}/cards", tags=["cards"])
 router = APIRouter(prefix="/cards", tags=["cards"])
 
 
-def get_card_or_404(
-    card_id: int, user: CurrentUser, db: Session = Depends(get_db)
-) -> Card:
-    card = db.get(Card, card_id)
-    if card is None or card.board_list.board.owner_id != user.id:
-        raise HTTPException(status_code=404, detail="Card not found")
-    return card
-
-
 @list_cards_router.post(
     "", response_model=CardRead, status_code=status.HTTP_201_CREATED
 )
 def create_card(
     payload: CardCreate,
-    board_list: BoardList = Depends(get_list_or_404),
+    board_list: EditableList,
     db: Session = Depends(get_db),
 ) -> Card:
     position = max((card.position for card in board_list.cards), default=-1) + 1
@@ -44,12 +34,12 @@ def create_card(
 
 
 @list_cards_router.get("", response_model=list[CardRead])
-def list_cards(board_list: BoardList = Depends(get_list_or_404)) -> Sequence[Card]:
+def list_cards(board_list: ViewableList) -> Sequence[Card]:
     return board_list.cards
 
 
 @router.get("/{card_id}", response_model=CardRead)
-def get_card(card: Card = Depends(get_card_or_404)) -> Card:
+def get_card(card: ViewableCard) -> Card:
     return card
 
 
@@ -68,7 +58,7 @@ def find_target_list(card: Card, list_id: int | None, db: Session) -> BoardList:
 @router.patch("/{card_id}", response_model=CardRead)
 def update_card(
     payload: CardUpdate,
-    card: Card = Depends(get_card_or_404),
+    card: EditableCard,
     db: Session = Depends(get_db),
 ) -> Card:
     # Move first: if the list or position is invalid, nothing has changed yet.
@@ -97,9 +87,7 @@ def update_card(
 
 
 @router.delete("/{card_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_card(
-    card: Card = Depends(get_card_or_404), db: Session = Depends(get_db)
-) -> None:
+def delete_card(card: EditableCard, db: Session = Depends(get_db)) -> None:
     board_list = card.board_list
     board_list.cards.remove(card)  # delete-orphan deletes it on commit
     renumber(board_list.cards)
