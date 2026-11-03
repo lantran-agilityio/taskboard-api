@@ -4,6 +4,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.api.routes.boards import router as boards_router
+from app.api.routes.cards import list_cards_router
+from app.api.routes.cards import router as cards_router
 from app.api.routes.health import router as health_router
 from app.api.routes.lists import board_lists_router
 from app.api.routes.lists import router as lists_router
@@ -29,3 +31,5 @@ app.include_router(health_router)
 app.include_router(boards_router)
 app.include_router(board_lists_router)
 app.include_router(lists_router)
+app.include_router(list_cards_router)
+app.include_router(cards_router)

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from app.services.ordering import move_item, renumber
+from app.services.ordering import move_item, renumber, transfer_item
 
 
 @dataclass
@@ -74,3 +74,56 @@ def test_move_item_not_in_items() -> None:
         move_item(items, stranger, 0)
 
     assert names_in_order(items) == ["A", "B"]
+
+
+@pytest.mark.parametrize(
+    ("new_position", "expected_target"),
+    [
+        (0, ["B", "X", "Y"]),
+        (1, ["X", "B", "Y"]),
+        (2, ["X", "Y", "B"]),
+    ],
+)
+def test_transfer_item(new_position: int, expected_target: list[str]) -> None:
+    source = make_items("A", "B", "C")
+    target = make_items("X", "Y")
+    item = source[1]
+
+    transfer_item(source, target, item, new_position)
+
+    remaining = [other for other in source if other is not item]
+    assert names_in_order(remaining) == ["A", "C"]
+    assert sorted(other.position for other in remaining) == [0, 1]
+    assert names_in_order([*target, item]) == expected_target
+    assert sorted(other.position for other in [*target, item]) == [0, 1, 2]
+
+
+def test_transfer_item_into_empty_target() -> None:
+    source = make_items("A")
+
+    transfer_item(source, [], source[0], 0)
+
+    assert source[0].position == 0
+
+
+@pytest.mark.parametrize("new_position", [-1, 3])
+def test_transfer_item_out_of_range(new_position: int) -> None:
+    source = make_items("A", "B", "C")
+    target = make_items("X", "Y")
+
+    with pytest.raises(ValueError):
+        transfer_item(source, target, source[0], new_position)
+
+    assert names_in_order(source) == ["A", "B", "C"]
+    assert [item.position for item in source] == [0, 1, 2]
+    assert [item.position for item in target] == [0, 1]
+
+
+def test_transfer_item_not_in_source() -> None:
+    source = make_items("A")
+    target = make_items("X")
+
+    with pytest.raises(ValueError):
+        transfer_item(source, target, target[0], 0)
+
+    assert [item.position for item in source + target] == [0, 0]

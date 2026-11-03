@@ -8,6 +8,7 @@ from app.core.database import Base
 
 if TYPE_CHECKING:
     from app.models.board import Board
+    from app.models.card import Card
 
 
 class BoardList(Base):
@@ -22,3 +23,8 @@ class BoardList(Base):
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
 
     board: Mapped["Board"] = relationship(back_populates="lists")
+    cards: Mapped[list["Card"]] = relationship(
+        back_populates="board_list",
+        cascade="all, delete-orphan",
+        order_by="Card.position",
+    )
