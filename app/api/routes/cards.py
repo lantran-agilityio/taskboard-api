@@ -8,6 +8,7 @@ from app.api.errors import body_validation_error
 from app.core.database import get_db
 from app.models.board_list import BoardList
 from app.models.card import Card
+from app.realtime.events import EventType, card_order, publish
 from app.schemas.card import CardCreate, CardRead, CardUpdate
 from app.services.ordering import move_item, renumber, transfer_item
 
@@ -28,6 +29,8 @@ def create_card(
     position = max((card.position for card in board_list.cards), default=-1) + 1
     card = Card(title=payload.title, description=payload.description, position=position)
     board_list.cards.append(card)
+    db.flush()  # gives the new card its id for the event
+    publish_card(db, EventType.CARD_CREATED, card, [board_list])
     db.commit()
     db.refresh(card)
     return card
@@ -41,6 +44,20 @@ def list_cards(board_list: ViewableList) -> Sequence[Card]:
 @router.get("/{card_id}", response_model=CardRead)
 def get_card(card: ViewableCard) -> Card:
     return card
+
+
+def publish_card(
+    db: Session, event_type: EventType, card: Card, lists: list[BoardList]
+) -> None:
+    publish(
+        db,
+        card.board_list.board_id,
+        event_type,
+        {
+            "card": CardRead.model_validate(card).model_dump(mode="json"),
+            "lists": [card_order(board_list) for board_list in lists],
+        },
+    )
 
 
 def find_target_list(card: Card, list_id: int | None, db: Session) -> BoardList:
@@ -81,6 +98,10 @@ def update_card(
     # Checked by name, because description=None means "clear it".
     if "description" in payload.model_fields_set:
         card.description = payload.description
+    db.flush()
+    # A cross-list move changes the order of both lists.
+    affected = [current] if target is current else [current, target]
+    publish_card(db, EventType.CARD_UPDATED, card, affected)
     db.commit()
     db.refresh(card)
     return card
@@ -91,4 +112,11 @@ def delete_card(card: EditableCard, db: Session = Depends(get_db)) -> None:
     board_list = card.board_list
     board_list.cards.remove(card)  # delete-orphan deletes it on commit
     renumber(board_list.cards)
+    db.flush()
+    publish(
+        db,
+        board_list.board_id,
+        EventType.CARD_DELETED,
+        {"card_id": card.id, "lists": [card_order(board_list)]},
+    )
     db.commit()

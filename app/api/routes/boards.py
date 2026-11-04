@@ -9,6 +9,7 @@ from app.api.deps import CurrentUser
 from app.core.database import get_db
 from app.models.board import Board
 from app.models.board_member import BoardMember
+from app.realtime.events import EventType, publish
 from app.schemas.board import BoardCreate, BoardRead, BoardUpdate
 
 router = APIRouter(prefix="/boards", tags=["boards"])
@@ -52,6 +53,13 @@ def rename_board(
     db: Session = Depends(get_db),
 ) -> Board:
     board.name = payload.name
+    db.flush()
+    publish(
+        db,
+        board.id,
+        EventType.BOARD_UPDATED,
+        {"board": BoardRead.model_validate(board).model_dump(mode="json")},
+    )
     db.commit()
     db.refresh(board)
     return board
@@ -59,5 +67,7 @@ def rename_board(
 
 @router.delete("/{board_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_board(board: OwnedBoard, db: Session = Depends(get_db)) -> None:
+    # Before deleting, so watchers learn why their sockets are about to close.
+    publish(db, board.id, EventType.BOARD_DELETED, {})
     db.delete(board)
     db.commit()

@@ -1,50 +1,19 @@
 """Requests that change the same board at the same moment.
 
-These tests need real commits on separate connections, so they don't use
-the rolled-back `db` session: each request gets its own session, and the
-tables are emptied afterwards.
+These tests need real commits on separate connections, so they use
+`committed_client` instead of the rolled-back `db` session.
 """
 
 import threading
-from collections.abc import Callable, Generator
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 
 import httpx2 as httpx
-import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, text
-from sqlalchemy.orm import Session, sessionmaker
 
-from app.core.database import get_db
 from app.main import app
-from tests.conftest import auth_headers
 
 THREADS = 10
-
-
-@pytest.fixture
-def committed_client(engine: Engine) -> Generator[TestClient]:
-    """A logged-in client whose requests commit for real."""
-    make_session = sessionmaker(bind=engine, autoflush=False)
-
-    def real_session() -> Generator[Session]:
-        with make_session() as session:
-            yield session
-
-    app.dependency_overrides[get_db] = real_session
-    try:
-        with TestClient(app, raise_server_exceptions=False) as client:
-            client.headers.update(auth_headers(client, "alice@example.com"))
-            yield client
-    finally:
-        app.dependency_overrides.clear()
-        with engine.begin() as connection:
-            connection.execute(
-                text(
-                    "TRUNCATE users, boards, board_members, lists, cards "
-                    "RESTART IDENTITY CASCADE"
-                )
-            )
 
 
 def run_together(

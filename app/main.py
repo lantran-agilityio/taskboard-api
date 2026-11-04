@@ -1,3 +1,6 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from app.api.routes.auth import router as auth_router
@@ -9,12 +12,25 @@ from app.api.routes.health import router as health_router
 from app.api.routes.lists import board_lists_router
 from app.api.routes.lists import router as lists_router
 from app.api.routes.members import router as members_router
+from app.api.routes.realtime import router as realtime_router
 from app.core.config import settings
+from app.realtime.hub import hub
+from app.realtime.listener import Listener
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    # Forwards committed board events from Postgres to this process's sockets.
+    listener = await Listener.start(settings.database_url, hub)
+    yield
+    await listener.stop()
+
 
 app = FastAPI(
     title=settings.app_name,
     description="Trello-style task board API: boards, lists and cards.",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.include_router(health_router)
@@ -26,3 +42,4 @@ app.include_router(board_lists_router)
 app.include_router(lists_router)
 app.include_router(list_cards_router)
 app.include_router(cards_router)
+app.include_router(realtime_router)
