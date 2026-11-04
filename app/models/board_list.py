@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -13,11 +13,14 @@ if TYPE_CHECKING:
 
 class BoardList(Base):
     __tablename__ = "lists"
+    # Checked at commit, not per row, so renumbering can pass through
+    # duplicates mid-move; a duplicate that survives to the commit fails it.
+    __table_args__ = (
+        UniqueConstraint("board_id", "position", deferrable=True, initially="DEFERRED"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    board_id: Mapped[int] = mapped_column(
-        ForeignKey("boards.id", ondelete="CASCADE"), index=True
-    )
+    board_id: Mapped[int] = mapped_column(ForeignKey("boards.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String(100))
     position: Mapped[int]
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))

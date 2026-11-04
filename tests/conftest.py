@@ -4,33 +4,64 @@ from collections.abc import Generator
 # Must be set before importing the app, which reads settings at import time.
 os.environ.setdefault("SECRET_KEY", "test-secret-key-at-least-32-bytes-long")
 
-import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
+from pathlib import Path
 
-from app.core.database import Base, get_db
+import pytest
+from alembic.config import Config
+from fastapi.testclient import TestClient
+from sqlalchemy import Engine, create_engine, text
+from sqlalchemy.orm import Session
+
+from alembic import command
+from app.core.config import settings
+from app.core.database import get_db
 from app.main import app
 
 PASSWORD = "correct-horse"
+ALEMBIC_INI = Path(__file__).parents[1] / "alembic.ini"
+
+
+def alembic_config() -> Config:
+    """Alembic pointed at the test database."""
+    config = Config(ALEMBIC_INI)
+    config.set_main_option("sqlalchemy.url", settings.test_database_url)
+    config.attributes["configure_logger"] = False
+    return config
+
+
+@pytest.fixture(scope="session")
+def engine() -> Generator[Engine]:
+    """The test database, rebuilt from the migrations once per test run."""
+    engine = create_engine(settings.test_database_url)
+    with engine.begin() as connection:
+        connection.execute(text("DROP SCHEMA public CASCADE"))
+        connection.execute(text("CREATE SCHEMA public"))
+    command.upgrade(alembic_config(), "head")
+    yield engine
+    engine.dispose()
 
 
 @pytest.fixture
-def db() -> Generator[Session]:
-    # A fresh in-memory database for every test.
-    engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
+def db(engine: Engine) -> Generator[Session]:
+    """A session whose changes are rolled back after the test.
+
+    Routes call commit(), which here only releases a savepoint inside one
+    outer transaction; rolling that back leaves the database empty again.
+    """
+    connection = engine.connect()
+    transaction = connection.begin()
+    session = Session(
+        bind=connection, autoflush=False, join_transaction_mode="create_savepoint"
     )
-    Base.metadata.create_all(bind=engine)
-    session = sessionmaker(bind=engine, autoflush=False)()
     try:
         yield session
+        # The real commit never happens, so check the deferred unique
+        # constraints now: every test must leave positions without duplicates.
+        session.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
     finally:
         session.close()
-        engine.dispose()
+        transaction.rollback()
+        connection.close()
 
 
 @pytest.fixture

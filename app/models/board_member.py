@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey
+from sqlalchemy import Enum, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -29,7 +29,14 @@ class BoardMember(Base):
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True
     )
-    role: Mapped[BoardRole]
+    # Store the values ("editor"), not the member names ("EDITOR").
+    role: Mapped[BoardRole] = mapped_column(
+        Enum(
+            BoardRole,
+            name="board_role",
+            values_callable=lambda roles: [role.value for role in roles],
+        )
+    )
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
 
     board: Mapped["Board"] = relationship(back_populates="members")

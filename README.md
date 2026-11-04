@@ -1,12 +1,18 @@
 # Taskboard API
 
-A Trello-style task board API built with FastAPI and SQLAlchemy: boards, lists and cards.
+A Trello-style task board API built with FastAPI, SQLAlchemy and PostgreSQL: boards, lists and cards.
 
 ## Run
 
+Needs PostgreSQL running locally (for example `brew install postgresql@17`).
+
 ```sh
+brew services start postgresql@17
+createdb taskboard
+createdb taskboard_test             # used by the tests
 uv sync
-cp .env.example .env   # then set SECRET_KEY
+cp .env.example .env                # then set SECRET_KEY
+uv run alembic upgrade head         # create or update the tables
 uv run uvicorn app.main:app --reload
 ```
 
@@ -15,7 +21,7 @@ Open http://127.0.0.1:8000/docs to try the API: register with `POST /auth/regist
 ## Test
 
 ```sh
-uv run pytest
+uv run pytest      # runs against the taskboard_test database
 uv run ruff check .
 ```
 

@@ -2,12 +2,18 @@
 
 A user with no role gets 404, so boards they aren't on stay hidden; a member
 whose role is too low gets 403, since they can already see the board.
+
+Write access (editor or owner) also locks the board row until the request
+commits, so requests that reorder the same board's lists or cards take turns.
+The lock is taken before the list or card is loaded, so everything the route
+reads comes after the previous request's commit.
 """
 
 from collections.abc import Callable
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentUser
@@ -19,7 +25,20 @@ from app.models.card import Card
 from app.services.permissions import allows, board_role
 
 
-def check_role(board: Board, user_id: int, minimum: BoardRole, missing: str) -> None:
+def load_board(
+    db: Session, board_id: int | None, user_id: int, minimum: BoardRole, missing: str
+) -> Board:
+    """The board, checked for the user's role and locked for writes."""
+    if board_id is None:
+        raise HTTPException(status_code=404, detail=missing)
+    query = select(Board).where(Board.id == board_id)
+    if minimum is not BoardRole.VIEWER:
+        # One lock per request, always on the board: a card move touching two
+        # lists still needs only this one, so requests can't deadlock.
+        query = query.with_for_update()
+    board = db.scalar(query)
+    if board is None:
+        raise HTTPException(status_code=404, detail=missing)
     role = board_role(board, user_id)
     if role is None:
         raise HTTPException(status_code=404, detail=missing)
@@ -28,17 +47,14 @@ def check_role(board: Board, user_id: int, minimum: BoardRole, missing: str) -> 
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Requires the {minimum} role",
         )
+    return board
 
 
 def board_access(minimum: BoardRole) -> Callable[..., Board]:
     def dependency(
         board_id: int, user: CurrentUser, db: Session = Depends(get_db)
     ) -> Board:
-        board = db.get(Board, board_id)
-        if board is None:
-            raise HTTPException(status_code=404, detail="Board not found")
-        check_role(board, user.id, minimum, "Board not found")
-        return board
+        return load_board(db, board_id, user.id, minimum, "Board not found")
 
     return dependency
 
@@ -47,10 +63,12 @@ def list_access(minimum: BoardRole) -> Callable[..., BoardList]:
     def dependency(
         list_id: int, user: CurrentUser, db: Session = Depends(get_db)
     ) -> BoardList:
+        # Only the board id first: the list itself is loaded after the lock.
+        board_id = db.scalar(select(BoardList.board_id).where(BoardList.id == list_id))
+        load_board(db, board_id, user.id, minimum, "List not found")
         board_list = db.get(BoardList, list_id)
-        if board_list is None:
+        if board_list is None:  # deleted while this request waited for the lock
             raise HTTPException(status_code=404, detail="List not found")
-        check_role(board_list.board, user.id, minimum, "List not found")
         return board_list
 
     return dependency
@@ -60,10 +78,13 @@ def card_access(minimum: BoardRole) -> Callable[..., Card]:
     def dependency(
         card_id: int, user: CurrentUser, db: Session = Depends(get_db)
     ) -> Card:
+        board_id = db.scalar(
+            select(BoardList.board_id).join(Card.board_list).where(Card.id == card_id)
+        )
+        load_board(db, board_id, user.id, minimum, "Card not found")
         card = db.get(Card, card_id)
-        if card is None:
+        if card is None:  # deleted while this request waited for the lock
             raise HTTPException(status_code=404, detail="Card not found")
-        check_role(card.board_list.board, user.id, minimum, "Card not found")
         return card
 
     return dependency
