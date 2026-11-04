@@ -10,12 +10,16 @@ import pytest
 from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, create_engine, text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from alembic import command
 from app.core.config import settings
 from app.core.database import get_db
 from app.main import app
+
+# Every TestClient starts the app's lifespan, whose realtime listener connects
+# to DATABASE_URL: point it at the test database, never at `taskboard`.
+settings.database_url = settings.test_database_url
 
 PASSWORD = "correct-horse"
 ALEMBIC_INI = Path(__file__).parents[1] / "alembic.ini"
@@ -100,3 +104,33 @@ def client(db: Session) -> Generator[TestClient]:
 def other_headers(client: TestClient) -> dict[str, str]:
     """Authorization header for a second user, bob@example.com."""
     return auth_headers(client, "bob@example.com")
+
+
+@pytest.fixture
+def committed_client(engine: Engine) -> Generator[TestClient]:
+    """A client logged in as alice@example.com whose requests commit for real.
+
+    For tests that need other connections to see the changes: concurrent
+    requests, and realtime events (Postgres only delivers NOTIFY on commit).
+    Each request gets its own session; the tables are emptied afterwards.
+    """
+    make_session = sessionmaker(bind=engine, autoflush=False)
+
+    def real_session() -> Generator[Session]:
+        with make_session() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = real_session
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            client.headers.update(auth_headers(client, "alice@example.com"))
+            yield client
+    finally:
+        app.dependency_overrides.clear()
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "TRUNCATE users, boards, board_members, lists, cards "
+                    "RESTART IDENTITY CASCADE"
+                )
+            )

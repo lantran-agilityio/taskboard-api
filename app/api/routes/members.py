@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.models.board import Board
 from app.models.board_member import BoardMember, BoardRole
 from app.models.user import User
+from app.realtime.events import EventType, publish
 from app.schemas.board_member import MemberCreate, MemberRead, MemberUpdate
 from app.services.permissions import board_role
 
@@ -17,6 +18,13 @@ router = APIRouter(prefix="/boards/{board_id}/members", tags=["members"])
 
 def member_read(member: BoardMember) -> MemberRead:
     return MemberRead(user_id=member.user_id, email=member.user.email, role=member.role)
+
+
+def publish_member(
+    db: Session, board: Board, event_type: EventType, member: BoardMember
+) -> None:
+    data = {"member": member_read(member).model_dump(mode="json")}
+    publish(db, board.id, event_type, data)
 
 
 def find_member(board: Board, user_id: int) -> BoardMember:
@@ -53,6 +61,8 @@ def add_member(
         )
     member = BoardMember(user=user, role=payload.role)
     board.members.append(member)
+    db.flush()
+    publish_member(db, board, EventType.MEMBER_ADDED, member)
     db.commit()
     return member_read(member)
 
@@ -66,6 +76,8 @@ def change_role(
 ) -> MemberRead:
     member = find_member(board, user_id)
     member.role = payload.role
+    db.flush()
+    publish_member(db, board, EventType.MEMBER_UPDATED, member)
     db.commit()
     return member_read(member)
 
@@ -87,4 +99,7 @@ def remove_member(
             status_code=status.HTTP_403_FORBIDDEN, detail="Requires the owner role"
         )
     board.members.remove(find_member(board, user_id))  # delete-orphan deletes it
+    db.flush()
+    # Also closes that user's sockets on this board.
+    publish(db, board.id, EventType.MEMBER_REMOVED, {"user_id": user_id})
     db.commit()

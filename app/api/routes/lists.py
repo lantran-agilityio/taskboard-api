@@ -7,6 +7,7 @@ from app.api.access import EditableBoard, EditableList, ViewableBoard, ViewableL
 from app.api.errors import body_validation_error
 from app.core.database import get_db
 from app.models.board_list import BoardList
+from app.realtime.events import EventType, list_order, publish
 from app.schemas.board_list import ListCreate, ListRead, ListUpdate
 from app.services.ordering import move_item, renumber
 
@@ -14,6 +15,18 @@ from app.services.ordering import move_item, renumber
 board_lists_router = APIRouter(prefix="/boards/{board_id}/lists", tags=["lists"])
 # ...and read, changed and deleted by their own id.
 router = APIRouter(prefix="/lists", tags=["lists"])
+
+
+def publish_list(db: Session, event_type: EventType, board_list: BoardList) -> None:
+    publish(
+        db,
+        board_list.board_id,
+        event_type,
+        {
+            "list": ListRead.model_validate(board_list).model_dump(mode="json"),
+            "list_ids": list_order(board_list.board),
+        },
+    )
 
 
 @board_lists_router.post(
@@ -27,6 +40,8 @@ def create_list(
     position = max((item.position for item in board.lists), default=-1) + 1
     board_list = BoardList(name=payload.name, position=position)
     board.lists.append(board_list)
+    db.flush()  # gives the new list its id for the event
+    publish_list(db, EventType.LIST_CREATED, board_list)
     db.commit()
     db.refresh(board_list)
     return board_list
@@ -58,6 +73,8 @@ def update_list(
             ) from error
     if payload.name is not None:
         board_list.name = payload.name
+    db.flush()
+    publish_list(db, EventType.LIST_UPDATED, board_list)
     db.commit()
     db.refresh(board_list)
     return board_list
@@ -68,4 +85,11 @@ def delete_list(board_list: EditableList, db: Session = Depends(get_db)) -> None
     board = board_list.board
     board.lists.remove(board_list)  # delete-orphan deletes it on commit
     renumber(board.lists)
+    db.flush()
+    publish(
+        db,
+        board.id,
+        EventType.LIST_DELETED,
+        {"list_id": board_list.id, "list_ids": list_order(board)},
+    )
     db.commit()
