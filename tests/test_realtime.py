@@ -4,6 +4,7 @@ from datetime import timedelta
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import Engine, text
 from starlette.testclient import WebSocketTestSession
 from starlette.websockets import WebSocketDisconnect
 
@@ -283,3 +284,27 @@ def test_events_from_other_boards_are_not_sent(committed_client: TestClient) -> 
 
     assert event["board_id"] == watched
     assert event["data"]["list"]["name"] == "Here"
+
+
+def test_listener_reconnects_and_asks_for_resync(
+    committed_client: TestClient, engine: Engine
+) -> None:
+    board_id = make_board(committed_client)
+    listener = committed_client.app.state.listener
+    old_pid = listener.backend_pid
+
+    with watch(committed_client, board_id) as ws:
+        # What a database restart does to the listener's connection.
+        with engine.begin() as connection:
+            connection.execute(
+                text("SELECT pg_terminate_backend(:pid)"), {"pid": old_pid}
+            )
+
+        assert ws.receive_json() == {"type": "resync"}
+        assert listener.backend_pid != old_pid
+
+        committed_client.patch(f"/boards/{board_id}", json={"name": "After restart"})
+        event = ws.receive_json()
+
+    assert event["type"] == "board.updated"
+    assert event["data"]["board"]["name"] == "After restart"

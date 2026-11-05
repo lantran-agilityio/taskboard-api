@@ -39,6 +39,8 @@ Events look like `{"type": "card.updated", "board_id": 1, "data": {...}}`:
 | `member.added`, `member.updated` | `member` |
 | `member.removed` | `user_id` (that user's sockets on the board then close with 4404) |
 
+The server may also send `{"type": "resync"}`: it may have missed changes (for example after a database restart), so refetch the board. The socket stays open.
+
 Close codes: `4401` for a missing, late or invalid auth message; `4404` if the board doesn't exist or you aren't (or are no longer) on it.
 
 ```js
