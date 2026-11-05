@@ -22,6 +22,9 @@ from app.realtime.listener import Listener
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Forwards committed board events from Postgres to this process's sockets.
     listener = await Listener.start(settings.database_url, hub)
+    # For tests that cut its connection. Stop the local one below: concurrent
+    # test clients each run this lifespan, and overwrite app.state.
+    app.state.listener = listener
     yield
     await listener.stop()
 

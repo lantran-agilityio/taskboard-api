@@ -70,3 +70,20 @@ def test_failed_send_drops_the_socket() -> None:
     asyncio.run(hub.dispatch(event("list.created", 1)))
 
     assert hub.subscribers(1) == []
+
+
+def test_broadcast_reaches_every_board_and_drops_dead_sockets() -> None:
+    class GoneSocket(FakeSocket):
+        async def send_json(self, data: dict[str, Any]) -> None:
+            raise RuntimeError("socket closed")
+
+    hub = BoardHub()
+    first, second = FakeSocket(), FakeSocket()
+    hub.connect(1, 10, first)  # type: ignore[arg-type]
+    hub.connect(2, 20, second)  # type: ignore[arg-type]
+    hub.connect(2, 30, GoneSocket())  # type: ignore[arg-type]
+
+    asyncio.run(hub.broadcast({"type": "resync"}))
+
+    assert first.sent == second.sent == [{"type": "resync"}]
+    assert [subscriber.user_id for subscriber in hub.subscribers(2)] == [20]

@@ -42,14 +42,25 @@ class BoardHub:
     def subscribers(self, board_id: int) -> list[Subscriber]:
         return list(self._boards.get(board_id, ()))
 
+    async def broadcast(self, message: dict[str, Any]) -> None:
+        """Send a message to every socket on every board."""
+        for board_id in list(self._boards):
+            for subscriber in self.subscribers(board_id):
+                await self._send(board_id, subscriber, message)
+
+    async def _send(
+        self, board_id: int, subscriber: Subscriber, message: dict[str, Any]
+    ) -> None:
+        try:
+            await subscriber.websocket.send_json(message)
+        except GONE:  # the client went away; stop sending to it
+            self.disconnect(board_id, subscriber)
+
     async def dispatch(self, event: dict[str, Any]) -> None:
         """Send an event to the board's sockets, then close the ones that lost access."""
         board_id = event["board_id"]
         for subscriber in self.subscribers(board_id):
-            try:
-                await subscriber.websocket.send_json(event)
-            except GONE:
-                self.disconnect(board_id, subscriber)
+            await self._send(board_id, subscriber, event)
 
         if event["type"] == EventType.BOARD_DELETED:
             lost_access = self.subscribers(board_id)
