@@ -9,12 +9,12 @@ from pathlib import Path
 import pytest
 from alembic.config import Config
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, create_engine, text
+from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from alembic import command
 from app.core.config import settings
-from app.core.database import get_db
+from app.core.database import get_db, make_engine
 from app.main import app
 
 # Every TestClient starts the app's lifespan, whose realtime listener connects
@@ -36,7 +36,7 @@ def alembic_config() -> Config:
 @pytest.fixture(scope="session")
 def engine() -> Generator[Engine]:
     """The test database, rebuilt from the migrations once per test run."""
-    engine = create_engine(settings.test_database_url)
+    engine = make_engine(settings.test_database_url)
     with engine.begin() as connection:
         connection.execute(text("DROP SCHEMA public CASCADE"))
         connection.execute(text("CREATE SCHEMA public"))
