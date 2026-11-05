@@ -2,12 +2,19 @@ from collections.abc import Generator
 from datetime import datetime
 from typing import Any, ClassVar
 
-from sqlalchemy import DateTime, MetaData, create_engine
+from sqlalchemy import DateTime, Engine, MetaData, create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.core.config import settings
 
-engine = create_engine(settings.database_url)
+
+def make_engine(url: str) -> Engine:
+    # pool_pre_ping: pooled connections die when Postgres restarts; check each
+    # one as it leaves the pool, so a request gets a live one instead of a 500.
+    return create_engine(url, pool_pre_ping=True)
+
+
+engine = make_engine(settings.database_url)
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False)
 
