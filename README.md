@@ -66,3 +66,7 @@ uv run ruff check .
 5. Board members and permissions
 6. Alembic migrations, PostgreSQL; protect positions against concurrent requests (row locks, unique `(board_id, position)`)
 7. Realtime board updates over WebSocket
+8. CI on GitHub Actions: lint and tests on every PR, against PostgreSQL
+9. Card details: due dates, labels and assignees; filter cards by them
+10. Archive and restore lists and cards instead of deleting them
+11. Comments on cards and a board activity log, with pagination
