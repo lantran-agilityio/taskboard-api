@@ -45,3 +45,4 @@ dist/
 
 # SQLite
 *.db
+pytest-report.xml

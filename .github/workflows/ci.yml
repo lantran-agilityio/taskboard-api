@@ -53,5 +53,9 @@ jobs:
           enable-cache: true
       - run: uv sync --locked
       # The engine fixture builds the schema from the migrations, so there's
-      # no separate alembic step.
-      - run: uv run pytest
+      # no separate alembic step. xunit1 records each test's file and line.
+      - run: uv run pytest --junitxml=pytest-report.xml -o junit_family=xunit1
+      # Logs need a GitHub login; annotations can be read through the public API.
+      - name: Annotate failed tests
+        if: failure()
+        run: uv run python .github/scripts/annotate_failures.py pytest-report.xml

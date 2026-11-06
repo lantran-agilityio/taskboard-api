@@ -20,6 +20,31 @@ uv run uvicorn app.main:app --reload
 
 Open http://127.0.0.1:8000/docs to try the API: register with `POST /auth/register`, then click **Authorize** and log in with your email and password.
 
+## Card details
+
+Cards can have a due date, labels and assignees:
+
+- **`due_at`:** a date and time with a timezone, such as `2026-11-20T17:00:00+07:00`. The API answers in UTC (`2026-11-20T10:00:00Z`). A time without a timezone is rejected with 422.
+- **`due_complete`:** `true` once the card is done.
+- **`label_ids`:** labels from the card's board. A board's labels are managed at `/boards/{board_id}/labels` and `/labels/{label_id}`. Each label has a `name` and a `color` (`green`, `yellow`, `orange`, `red`, `purple` or `blue`).
+- **`assignee_ids`:** user ids of the board's owner or members. Removing someone from a board also unassigns them from its cards.
+
+Set them when creating a card, or change them with `PATCH /cards/{card_id}`:
+- `label_ids` and `assignee_ids` replace the whole set, and `[]` clears it.
+- `"due_at": null` removes the due date.
+- A field you leave out stays as it is.
+
+Viewers can read labels. Editors and owners can create, change and delete them.
+
+Search a board's cards with `GET /boards/{board_id}/cards`:
+- The results come in board order (list position, then card position).
+- Filters are optional and combine: `label_id`, `assignee_id` and `due_before` (a datetime with a timezone; cards without a due date don't match).
+
+```sh
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://127.0.0.1:8000/boards/1/cards?assignee_id=2&due_before=2026-11-21T00:00:00Z"
+```
+
 ## Realtime
 
 Anyone who can view a board can watch it over a WebSocket and get an event for every change, as soon as it's committed.
@@ -38,8 +63,10 @@ Events look like `{"type": "card.updated", "board_id": 1, "data": {...}}`:
 | `list.deleted` | `list_id`, `list_ids` |
 | `card.created`, `card.updated` | `card`, `lists: [{list_id, card_ids}]` (each affected list in its new order; both lists for a move between lists) |
 | `card.deleted` | `card_id`, `lists` |
+| `label.created`, `label.updated` | `label` |
+| `label.deleted` | `label_id` (drop it from every card's `label_ids`) |
 | `member.added`, `member.updated` | `member` |
-| `member.removed` | `user_id` (that user's sockets on the board then close with 4404) |
+| `member.removed` | `user_id` (drop them from every card's `assignee_ids`; that user's sockets on the board then close with 4404) |
 
 The server may also send `{"type": "resync"}`: it may have missed changes (for example after a database restart), so refetch the board. The socket stays open.
 

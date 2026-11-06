@@ -257,6 +257,46 @@ def test_member_events(committed_client: TestClient) -> None:
         assert alice_ws.receive_json()["type"] == "board.updated"
 
 
+def test_label_events(committed_client: TestClient) -> None:
+    board_id = make_board(committed_client)
+    list_id = make_list(committed_client, board_id, "A")
+
+    with watch(committed_client, board_id) as ws:
+        label = committed_client.post(
+            f"/boards/{board_id}/labels", json={"name": "Bug", "color": "red"}
+        ).json()
+        event = ws.receive_json()
+        assert event["type"] == "label.created"
+        assert event["data"] == {"label": label}
+
+        committed_client.patch(f"/labels/{label['id']}", json={"color": "blue"})
+        event = ws.receive_json()
+        assert event["type"] == "label.updated"
+        assert event["data"]["label"]["color"] == "blue"
+
+        card_id = make_card(committed_client, list_id, "C")
+        ws.receive_json()  # card.created
+        committed_client.patch(
+            f"/cards/{card_id}",
+            json={
+                "label_ids": [label["id"]],
+                "due_at": "2026-11-20T10:00:00Z",
+                "due_complete": True,
+            },
+        )
+        event = ws.receive_json()
+        assert event["type"] == "card.updated"
+        card = event["data"]["card"]
+        assert card["label_ids"] == [label["id"]]
+        assert card["due_at"] == "2026-11-20T10:00:00Z"
+        assert card["due_complete"] is True
+
+        committed_client.delete(f"/labels/{label['id']}")
+        event = ws.receive_json()
+        assert event["type"] == "label.deleted"
+        assert event["data"] == {"label_id": label["id"]}
+
+
 def test_failed_request_sends_no_event(committed_client: TestClient) -> None:
     board_id = make_board(committed_client)
     list_id = make_list(committed_client, board_id, "A")

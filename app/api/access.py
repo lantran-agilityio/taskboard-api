@@ -22,6 +22,7 @@ from app.models.board import Board
 from app.models.board_list import BoardList
 from app.models.board_member import BoardRole
 from app.models.card import Card
+from app.models.label import Label
 from app.services.permissions import allows, board_role
 
 
@@ -90,6 +91,20 @@ def card_access(minimum: BoardRole) -> Callable[..., Card]:
     return dependency
 
 
+def label_access(minimum: BoardRole) -> Callable[..., Label]:
+    def dependency(
+        label_id: int, user: CurrentUser, db: Session = Depends(get_db)
+    ) -> Label:
+        board_id = db.scalar(select(Label.board_id).where(Label.id == label_id))
+        load_board(db, board_id, user.id, minimum, "Label not found")
+        label = db.get(Label, label_id)
+        if label is None:  # deleted while this request waited for the lock
+            raise HTTPException(status_code=404, detail="Label not found")
+        return label
+
+    return dependency
+
+
 ViewableBoard = Annotated[Board, Depends(board_access(BoardRole.VIEWER))]
 EditableBoard = Annotated[Board, Depends(board_access(BoardRole.EDITOR))]
 OwnedBoard = Annotated[Board, Depends(board_access(BoardRole.OWNER))]
@@ -97,3 +112,5 @@ ViewableList = Annotated[BoardList, Depends(list_access(BoardRole.VIEWER))]
 EditableList = Annotated[BoardList, Depends(list_access(BoardRole.EDITOR))]
 ViewableCard = Annotated[Card, Depends(card_access(BoardRole.VIEWER))]
 EditableCard = Annotated[Card, Depends(card_access(BoardRole.EDITOR))]
+ViewableLabel = Annotated[Label, Depends(label_access(BoardRole.VIEWER))]
+EditableLabel = Annotated[Label, Depends(label_access(BoardRole.EDITOR))]
