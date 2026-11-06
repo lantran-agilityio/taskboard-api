@@ -5,6 +5,7 @@ from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.models.archive import active, newest_archived
 
 if TYPE_CHECKING:
     from app.models.board_list import BoardList
@@ -39,3 +40,13 @@ class Board(Base):
         cascade="all, delete-orphan",
         order_by="Label.id",
     )
+
+    # Every list, archived or not, is in `lists` (so deletes cascade); ordering
+    # code works on the active ones only.
+    @property
+    def active_lists(self) -> list["BoardList"]:
+        return active(self.lists)
+
+    @property
+    def archived_lists(self) -> list["BoardList"]:
+        return newest_archived(self.lists)

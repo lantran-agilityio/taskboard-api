@@ -17,9 +17,13 @@ class EventType(StrEnum):
     LIST_CREATED = "list.created"
     LIST_UPDATED = "list.updated"
     LIST_DELETED = "list.deleted"
+    LIST_ARCHIVED = "list.archived"
+    LIST_RESTORED = "list.restored"
     CARD_CREATED = "card.created"
     CARD_UPDATED = "card.updated"
     CARD_DELETED = "card.deleted"
+    CARD_ARCHIVED = "card.archived"
+    CARD_RESTORED = "card.restored"
     LABEL_CREATED = "label.created"
     LABEL_UPDATED = "label.updated"
     LABEL_DELETED = "label.deleted"
@@ -42,11 +46,13 @@ def publish(
 
 
 def list_order(board: Board) -> list[int]:
-    """The board's list ids in position order."""
-    return [item.id for item in sorted(board.lists, key=lambda item: item.position)]
+    """The board's active list ids in position order."""
+    return [item.id for item in board.active_lists]
 
 
 def card_order(board_list: BoardList) -> dict[str, Any]:
-    """One list's card ids in position order."""
-    cards = sorted(board_list.cards, key=lambda card: card.position)
-    return {"list_id": board_list.id, "card_ids": [card.id for card in cards]}
+    """One list's active card ids in position order."""
+    return {
+        "list_id": board_list.id,
+        "card_ids": [card.id for card in board_list.active_cards],
+    }

@@ -297,6 +297,39 @@ def test_label_events(committed_client: TestClient) -> None:
         assert event["data"] == {"label_id": label["id"]}
 
 
+def test_archive_events(committed_client: TestClient) -> None:
+    board_id = make_board(committed_client)
+    first = make_list(committed_client, board_id, "A")
+    second = make_list(committed_client, board_id, "B")
+    x = make_card(committed_client, first, "X")
+    y = make_card(committed_client, first, "Y")
+
+    with watch(committed_client, board_id) as ws:
+        committed_client.post(f"/cards/{x}/archive")
+        event = ws.receive_json()
+        assert event["type"] == "card.archived"
+        assert event["data"]["card"]["id"] == x
+        assert event["data"]["card"]["archived_at"] is not None
+        assert event["data"]["lists"] == [{"list_id": first, "card_ids": [y]}]
+
+        committed_client.post(f"/cards/{x}/restore")
+        event = ws.receive_json()
+        assert event["type"] == "card.restored"
+        assert event["data"]["lists"] == [{"list_id": first, "card_ids": [y, x]}]
+
+        committed_client.post(f"/lists/{first}/archive")
+        event = ws.receive_json()
+        assert event["type"] == "list.archived"
+        assert event["data"]["list"]["id"] == first
+        assert event["data"]["list_ids"] == [second]
+
+        committed_client.post(f"/lists/{first}/restore")
+        event = ws.receive_json()
+        assert event["type"] == "list.restored"
+        assert event["data"]["list"]["position"] == 1
+        assert event["data"]["list_ids"] == [second, first]
+
+
 def test_failed_request_sends_no_event(committed_client: TestClient) -> None:
     board_id = make_board(committed_client)
     list_id = make_list(committed_client, board_id, "A")

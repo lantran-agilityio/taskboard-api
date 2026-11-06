@@ -3,7 +3,7 @@ from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.schemas.common import Name
+from app.schemas.common import Name, UtcDatetime
 
 
 class ListCreate(BaseModel):
@@ -27,5 +27,6 @@ class ListRead(BaseModel):
     id: int
     board_id: int
     name: str
-    position: int
+    position: int | None  # None while archived
     created_at: datetime
+    archived_at: UtcDatetime | None

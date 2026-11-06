@@ -810,3 +810,240 @@ def test_other_users_search_returns_404(
     response = client.get(f"/boards/{board['id']}/cards", headers=other_headers)
 
     assert response.status_code == 404
+
+
+# Archive and restore
+
+
+def card_action(client: TestClient, card_id: int, action: str = "archive") -> dict:
+    response = client.post(f"/cards/{card_id}/{action}")
+    assert response.status_code == 200
+    return response.json()
+
+
+def list_action(client: TestClient, list_id: int, action: str = "archive") -> None:
+    assert client.post(f"/lists/{list_id}/{action}").status_code == 200
+
+
+def archived_titles(client: TestClient, list_id: int) -> list[str]:
+    response = client.get(f"/lists/{list_id}/cards", params={"archived": True})
+    assert response.status_code == 200
+    return [card["title"] for card in response.json()]
+
+
+def test_archive_card_hides_it_and_renumbers_the_rest(client: TestClient) -> None:
+    list_id, cards = list_with_cards(client, "A", "B", "C")
+
+    body = card_action(client, cards["B"]["id"])
+
+    assert body["archived_at"] is not None
+    assert body["position"] is None
+    assert card_titles(client, list_id) == ["A", "C"]
+    assert_positions_are_dense(client, list_id)
+    assert archived_titles(client, list_id) == ["B"]
+    assert client.get(f"/cards/{cards['B']['id']}").json() == body
+
+
+def test_archived_cards_newest_first(client: TestClient) -> None:
+    list_id, cards = list_with_cards(client, "A", "B", "C")
+    for title in "BCA":
+        card_action(client, cards[title]["id"])
+
+    assert archived_titles(client, list_id) == ["A", "C", "B"]
+
+
+def test_archived_card_keeps_its_details(client: TestClient) -> None:
+    board_id, list_id = card_board(client)
+    bug = create_label(client, board_id)
+    card = create_card(
+        client, list_id, due_at=DUE, label_ids=[bug], assignee_ids=[me(client)]
+    )
+
+    card_action(client, card["id"])
+    restored = card_action(client, card["id"], "restore")
+
+    assert restored == {**card, "archived_at": None}
+
+
+def test_restore_card_puts_it_at_the_end(client: TestClient) -> None:
+    list_id, cards = list_with_cards(client, "A", "B", "C")
+    card_action(client, cards["A"]["id"])
+
+    body = card_action(client, cards["A"]["id"], "restore")
+
+    assert body["position"] == 2
+    assert card_titles(client, list_id) == ["B", "C", "A"]
+    assert archived_titles(client, list_id) == []
+
+
+def test_new_card_after_archive_goes_to_the_end(client: TestClient) -> None:
+    list_id, cards = list_with_cards(client, "A", "B")
+    card_action(client, cards["B"]["id"])
+
+    assert create_card(client, list_id, "C")["position"] == 1
+
+
+@pytest.mark.parametrize(
+    ("first", "again"), [("archive", "archive"), (None, "restore")]
+)
+def test_archive_or_restore_card_twice_returns_422(
+    client: TestClient, first: str | None, again: str
+) -> None:
+    _, cards = list_with_cards(client, "A")
+    if first:
+        card_action(client, cards["A"]["id"], first)
+
+    response = client.post(f"/cards/{cards['A']['id']}/{again}")
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["path", "card_id"]
+
+
+@pytest.mark.parametrize(
+    "payload", [{"title": "New"}, {"position": 0}, {"label_ids": []}]
+)
+def test_change_archived_card_returns_422(client: TestClient, payload: dict) -> None:
+    _, cards = list_with_cards(client, "A", "B")
+    archived = card_action(client, cards["A"]["id"])
+
+    response = client.patch(f"/cards/{cards['A']['id']}", json=payload)
+
+    assert response.status_code == 422
+    assert client.get(f"/cards/{cards['A']['id']}").json() == archived
+
+
+def test_delete_archived_card(client: TestClient) -> None:
+    list_id, cards = list_with_cards(client, "A", "B")
+    card_action(client, cards["A"]["id"])
+
+    assert client.delete(f"/cards/{cards['A']['id']}").status_code == 204
+
+    assert archived_titles(client, list_id) == []
+    assert card_titles(client, list_id) == ["B"]
+    assert_positions_are_dense(client, list_id)
+
+
+# Cards of an archived list are frozen
+
+
+def test_archived_list_keeps_its_cards(client: TestClient) -> None:
+    first, _, cards = two_lists(client)
+    card_action(client, cards["B"]["id"])
+
+    list_action(client, first)
+    list_action(client, first, "restore")
+
+    assert card_titles(client, first) == ["A", "C"]
+    assert archived_titles(client, first) == ["B"]
+
+
+@pytest.mark.parametrize(
+    "payload", [{"title": "New"}, {"position": 1}, {"due_complete": True}]
+)
+def test_change_card_in_archived_list_returns_422(
+    client: TestClient, payload: dict
+) -> None:
+    first, _, cards = two_lists(client)
+    list_action(client, first)
+
+    response = client.patch(f"/cards/{cards['A']['id']}", json=payload)
+
+    assert response.status_code == 422
+    assert card_titles(client, first) == ["A", "B", "C"]
+
+
+def test_move_card_out_of_archived_list_returns_422(client: TestClient) -> None:
+    first, second, cards = two_lists(client)
+    list_action(client, first)
+
+    response = client.patch(f"/cards/{cards['A']['id']}", json={"list_id": second})
+
+    assert response.status_code == 422
+    assert card_titles(client, first) == ["A", "B", "C"]
+    assert card_titles(client, second) == ["X", "Y"]
+
+
+def test_move_card_into_archived_list_returns_422(client: TestClient) -> None:
+    first, second, cards = two_lists(client)
+    list_action(client, second)
+
+    response = client.patch(f"/cards/{cards['A']['id']}", json={"list_id": second})
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["body", "list_id"]
+    assert card_titles(client, first) == ["A", "B", "C"]
+    assert card_titles(client, second) == ["X", "Y"]
+
+
+def test_create_card_in_archived_list_returns_422(client: TestClient) -> None:
+    list_id, _ = list_with_cards(client, "A")
+    list_action(client, list_id)
+
+    response = client.post(f"/lists/{list_id}/cards", json={"title": "New"})
+
+    assert response.status_code == 422
+    assert card_titles(client, list_id) == ["A"]
+
+
+@pytest.mark.parametrize("action", ["archive", "restore"])
+def test_archive_or_restore_card_in_archived_list_returns_422(
+    client: TestClient, action: str
+) -> None:
+    list_id, cards = list_with_cards(client, "A", "B")
+    card_action(client, cards["B"]["id"])
+    list_action(client, list_id)
+    card = cards["A"] if action == "archive" else cards["B"]
+
+    response = client.post(f"/cards/{card['id']}/{action}")
+
+    assert response.status_code == 422
+
+
+def test_delete_card_in_archived_list(client: TestClient) -> None:
+    list_id, cards = list_with_cards(client, "A", "B")
+    list_action(client, list_id)
+
+    assert client.delete(f"/cards/{cards['A']['id']}").status_code == 204
+
+    list_action(client, list_id, "restore")
+    assert card_titles(client, list_id) == ["B"]
+    assert_positions_are_dense(client, list_id)
+
+
+# Search and archived items
+
+
+def test_search_leaves_out_archived_cards_and_lists(client: TestClient) -> None:
+    first, second, cards = two_lists(client)
+    board_id = client.get(f"/lists/{first}").json()["board_id"]
+    card_action(client, cards["B"]["id"])
+    list_action(client, second)
+
+    assert search(client, board_id) == ["A", "C"]
+    assert search(client, board_id, archived=True) == ["B"]
+
+
+def test_search_archived_cards_newest_first_with_filters(client: TestClient) -> None:
+    board_id, list_id = card_board(client)
+    bug = create_label(client, board_id)
+    for title in ("A", "B", "C"):
+        card = create_card(
+            client, list_id, title, label_ids=[bug] if title != "B" else []
+        )
+        card_action(client, card["id"])
+
+    assert search(client, board_id, archived=True) == ["C", "B", "A"]
+    assert search(client, board_id, archived=True, label_id=bug) == ["C", "A"]
+
+
+@pytest.mark.parametrize("action", ["archive", "restore"])
+def test_other_users_card_archive_returns_404(
+    client: TestClient, other_headers: dict, action: str
+) -> None:
+    _, cards = list_with_cards(client, "A")
+    if action == "restore":
+        card_action(client, cards["A"]["id"])
+
+    response = client.post(f"/cards/{cards['A']['id']}/{action}", headers=other_headers)
+
+    assert response.status_code == 404

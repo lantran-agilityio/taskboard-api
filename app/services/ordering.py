@@ -12,6 +12,16 @@ def renumber(items: Sequence[Positioned]) -> None:
         item.position = index
 
 
+def remove_item[T: Positioned](items: Sequence[T], item: T) -> None:
+    """Take item out of the order and renumber the others 0..n-1.
+
+    Only the others' positions change: the caller deletes or archives item.
+    """
+    if not any(other is item for other in items):
+        raise ValueError("Item is not in this sequence")
+    renumber([other for other in items if other is not item])
+
+
 def move_item[T: Positioned](items: Sequence[T], item: T, new_position: int) -> None:
     """Move item to new_position and shift the others to make room."""
     if not any(other is item for other in items):

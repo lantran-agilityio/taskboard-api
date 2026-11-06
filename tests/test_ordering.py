@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from app.services.ordering import move_item, renumber, transfer_item
+from app.services.ordering import move_item, remove_item, renumber, transfer_item
 
 
 @dataclass
@@ -127,3 +127,22 @@ def test_transfer_item_not_in_source() -> None:
         transfer_item(source, target, target[0], 0)
 
     assert [item.position for item in source + target] == [0, 0]
+
+
+def test_remove_item_renumbers_the_rest() -> None:
+    items = make_items("A", "B", "C", "D")
+    removed = items[1]
+
+    remove_item(items, removed)
+
+    assert [item.position for item in items if item is not removed] == [0, 1, 2]
+    assert names_in_order([item for item in items if item is not removed]) == [
+        "A",
+        "C",
+        "D",
+    ]
+
+
+def test_remove_item_not_in_sequence() -> None:
+    with pytest.raises(ValueError, match="not in this sequence"):
+        remove_item(make_items("A"), Item("X", 0))
