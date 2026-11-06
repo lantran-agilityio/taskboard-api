@@ -316,3 +316,148 @@ def test_other_users_list_returns_404(
     assert response.status_code == 404
     assert response.json() == {"detail": "List not found"}
     assert list_names(client, board_id) == ["A", "B"]
+
+
+# Archive and restore
+
+
+def archive(client: TestClient, list_id: int, action: str = "archive") -> dict:
+    response = client.post(f"/lists/{list_id}/{action}")
+    assert response.status_code == 200
+    return response.json()
+
+
+def archived_names(client: TestClient, board_id: int) -> list[str]:
+    response = client.get(f"/boards/{board_id}/lists", params={"archived": True})
+    assert response.status_code == 200
+    return [board_list["name"] for board_list in response.json()]
+
+
+def positions(client: TestClient, board_id: int) -> list[int]:
+    lists = client.get(f"/boards/{board_id}/lists").json()
+    return [board_list["position"] for board_list in lists]
+
+
+def test_new_list_is_not_archived(client: TestClient) -> None:
+    _, lists = board_with_lists(client, "A")
+
+    assert lists["A"]["archived_at"] is None
+
+
+def test_archive_list_hides_it_and_renumbers_the_rest(client: TestClient) -> None:
+    board_id, lists = board_with_lists(client, "A", "B", "C")
+
+    body = archive(client, lists["B"]["id"])
+
+    assert body["archived_at"] is not None
+    assert body["position"] is None
+    assert list_names(client, board_id) == ["A", "C"]
+    assert positions(client, board_id) == [0, 1]
+    assert archived_names(client, board_id) == ["B"]
+
+
+def test_archived_list_can_still_be_read(client: TestClient) -> None:
+    _, lists = board_with_lists(client, "A")
+    archived = archive(client, lists["A"]["id"])
+
+    response = client.get(f"/lists/{lists['A']['id']}")
+
+    assert response.status_code == 200
+    assert response.json() == archived
+
+
+def test_archived_lists_newest_first(client: TestClient) -> None:
+    board_id, lists = board_with_lists(client, "A", "B", "C")
+    for name in "CAB":
+        archive(client, lists[name]["id"])
+
+    assert archived_names(client, board_id) == ["B", "A", "C"]
+    assert list_names(client, board_id) == []
+
+
+def test_restore_list_puts_it_at_the_end(client: TestClient) -> None:
+    board_id, lists = board_with_lists(client, "A", "B", "C")
+    archive(client, lists["A"]["id"])
+
+    body = archive(client, lists["A"]["id"], "restore")
+
+    assert body["archived_at"] is None
+    assert body["position"] == 2
+    assert list_names(client, board_id) == ["B", "C", "A"]
+    assert archived_names(client, board_id) == []
+
+
+def test_new_list_after_archive_goes_to_the_end(client: TestClient) -> None:
+    board_id, lists = board_with_lists(client, "A", "B")
+    archive(client, lists["B"]["id"])
+
+    new = create_list(client, board_id, "C")
+
+    assert new["position"] == 1
+    assert list_names(client, board_id) == ["A", "C"]
+
+
+@pytest.mark.parametrize(
+    ("first", "again"), [("archive", "archive"), (None, "restore")]
+)
+def test_archive_or_restore_twice_returns_422(
+    client: TestClient, first: str | None, again: str
+) -> None:
+    _, lists = board_with_lists(client, "A")
+    if first:
+        archive(client, lists["A"]["id"], first)
+
+    response = client.post(f"/lists/{lists['A']['id']}/{again}")
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["path", "list_id"]
+
+
+@pytest.mark.parametrize("payload", [{"name": "New"}, {"position": 0}])
+def test_change_archived_list_returns_422(client: TestClient, payload: dict) -> None:
+    board_id, lists = board_with_lists(client, "A", "B")
+    archive(client, lists["A"]["id"])
+
+    response = client.patch(f"/lists/{lists['A']['id']}", json=payload)
+
+    assert response.status_code == 422
+    assert archived_names(client, board_id) == ["A"]
+    assert list_names(client, board_id) == ["B"]
+
+
+def test_delete_archived_list(client: TestClient) -> None:
+    board_id, lists = board_with_lists(client, "A", "B")
+    archive(client, lists["A"]["id"])
+
+    assert client.delete(f"/lists/{lists['A']['id']}").status_code == 204
+
+    assert archived_names(client, board_id) == []
+    assert list_names(client, board_id) == ["B"]
+    assert positions(client, board_id) == [0]
+
+
+@pytest.mark.parametrize("archived", ["maybe", "2"])
+def test_archived_filter_must_be_a_bool(client: TestClient, archived: str) -> None:
+    board_id, _ = board_with_lists(client, "A")
+
+    response = client.get(f"/boards/{board_id}/lists", params={"archived": archived})
+
+    assert response.status_code == 422
+
+
+def test_archive_missing_list_returns_404(client: TestClient) -> None:
+    assert client.post("/lists/999/archive").status_code == 404
+    assert client.post("/lists/999/restore").status_code == 404
+
+
+@pytest.mark.parametrize("action", ["archive", "restore"])
+def test_other_users_list_archive_returns_404(
+    client: TestClient, other_headers: dict, action: str
+) -> None:
+    _, lists = board_with_lists(client, "A")
+    if action == "restore":
+        archive(client, lists["A"]["id"])
+
+    response = client.post(f"/lists/{lists['A']['id']}/{action}", headers=other_headers)
+
+    assert response.status_code == 404

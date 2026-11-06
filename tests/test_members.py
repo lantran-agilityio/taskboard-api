@@ -371,7 +371,7 @@ def test_leaving_a_board_unassigns_from_its_cards_only(
 
 @pytest.fixture
 def shared_board(client: TestClient) -> dict:
-    """Alice's board with lists A (holding card C) and B."""
+    """Alice's board: lists A (card C, archived card Old), B, archived list D."""
     board = create_board(client)
     lists = {
         name: client.post(f"/boards/{board['id']}/lists", json={"name": name}).json()
@@ -381,7 +381,22 @@ def shared_board(client: TestClient) -> dict:
     label = client.post(
         f"/boards/{board['id']}/labels", json={"name": "L", "color": "red"}
     ).json()
-    return {"board": board, "lists": lists, "card": card, "label": label}
+    archived_list = client.post(
+        f"/boards/{board['id']}/lists", json={"name": "D"}
+    ).json()
+    client.post(f"/lists/{archived_list['id']}/archive")
+    archived_card = client.post(
+        f"/lists/{lists['A']['id']}/cards", json={"title": "Old"}
+    ).json()
+    client.post(f"/cards/{archived_card['id']}/archive")
+    return {
+        "board": board,
+        "lists": lists,
+        "card": card,
+        "label": label,
+        "archived_list": archived_list,
+        "archived_card": archived_card,
+    }
 
 
 def snapshot(client: TestClient, ids: dict) -> dict:
@@ -393,6 +408,12 @@ def snapshot(client: TestClient, ids: dict) -> dict:
         "lists": lists,
         "cards": [client.get(f"/lists/{item['id']}/cards").json() for item in lists],
         "labels": client.get(f"/boards/{board_id}/labels").json(),
+        "archived lists": client.get(
+            f"/boards/{board_id}/lists", params={"archived": True}
+        ).json(),
+        "archived cards": client.get(
+            f"/boards/{board_id}/cards", params={"archived": True}
+        ).json(),
     }
 
 
@@ -469,6 +490,31 @@ ACTIONS: dict[str, tuple[Request, int, int]] = {
     ),
     "search cards": (
         lambda s: ("GET", f"/boards/{s['board']['id']}/cards", None),
+        200,
+        200,
+    ),
+    "archive list": (
+        lambda s: ("POST", f"/lists/{s['lists']['B']['id']}/archive", None),
+        403,
+        200,
+    ),
+    "restore list": (
+        lambda s: ("POST", f"/lists/{s['archived_list']['id']}/restore", None),
+        403,
+        200,
+    ),
+    "archive card": (
+        lambda s: ("POST", f"/cards/{s['card']['id']}/archive", None),
+        403,
+        200,
+    ),
+    "restore card": (
+        lambda s: ("POST", f"/cards/{s['archived_card']['id']}/restore", None),
+        403,
+        200,
+    ),
+    "read archived lists": (
+        lambda s: ("GET", f"/boards/{s['board']['id']}/lists?archived=true", None),
         200,
         200,
     ),

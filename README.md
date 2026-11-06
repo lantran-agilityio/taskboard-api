@@ -45,6 +45,30 @@ curl -H "Authorization: Bearer $TOKEN" \
   "http://127.0.0.1:8000/boards/1/cards?assignee_id=2&due_before=2026-11-21T00:00:00Z"
 ```
 
+## Archive
+
+Archive a list or card to take it off the board without losing it, and restore it later:
+- `POST /lists/{list_id}/archive`, `POST /lists/{list_id}/restore`
+- `POST /cards/{card_id}/archive`, `POST /cards/{card_id}/restore`
+
+An archived item keeps everything: its name, its cards (for a list), and its labels, assignees and due date (for a card).
+- **While archived:** its `archived_at` is set and its `position` is `null`, and the other items close the gap.
+- **On restore:** it goes back to the end of its board or list.
+- **Errors:** archiving something already archived, or restoring something that isn't, is a 422.
+
+While a list is archived, its cards are frozen with it:
+- They can be read and deleted.
+- They can't be created, changed, moved in or out, archived or restored. Each of those is a 422 until the list is restored.
+- A card that is archived itself can't be changed either. Restore it first.
+
+`GET /boards/{board_id}/lists`, `GET /lists/{list_id}/cards` and `GET /boards/{board_id}/cards` show active items by default.
+- Add `?archived=true` to get the archived ones instead, newest first.
+- Board search leaves out the cards of archived lists either way.
+
+`DELETE` still removes a list or card for good, whether it's archived or not.
+
+Viewers can see archived items; editors and owners can archive and restore.
+
 ## Realtime
 
 Anyone who can view a board can watch it over a WebSocket and get an event for every change, as soon as it's committed.
@@ -61,8 +85,10 @@ Events look like `{"type": "card.updated", "board_id": 1, "data": {...}}`:
 | `board.deleted` | `{}` (then the socket closes with 4404) |
 | `list.created`, `list.updated` | `list`, `list_ids` (the board's lists in their new order) |
 | `list.deleted` | `list_id`, `list_ids` |
+| `list.archived`, `list.restored` | `list`, `list_ids` (an archived list is gone from `list_ids`, like a deleted one) |
 | `card.created`, `card.updated` | `card`, `lists: [{list_id, card_ids}]` (each affected list in its new order; both lists for a move between lists) |
 | `card.deleted` | `card_id`, `lists` |
+| `card.archived`, `card.restored` | `card`, `lists` |
 | `label.created`, `label.updated` | `label` |
 | `label.deleted` | `label_id` (drop it from every card's `label_ids`) |
 | `member.added`, `member.updated` | `member` |

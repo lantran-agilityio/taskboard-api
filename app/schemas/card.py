@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Annotated, Self
 
 from pydantic import (
@@ -11,7 +11,7 @@ from pydantic import (
     model_validator,
 )
 
-from app.schemas.common import Name
+from app.schemas.common import Name, UtcDatetime
 
 Description = Annotated[str, StringConstraints(max_length=2000)]
 # A set of ids sent as a list: repeats are dropped and the order is fixed.
@@ -19,10 +19,6 @@ IdSet = Annotated[
     list[Annotated[int, Field(ge=1, strict=True)]],
     AfterValidator(lambda ids: sorted(set(ids))),
 ]
-
-
-# Postgres returns timestamptz in the connection's time zone; answer in UTC.
-UtcDatetime = Annotated[datetime, AfterValidator(lambda value: value.astimezone(UTC))]
 
 
 class CardCreate(BaseModel):
@@ -70,8 +66,9 @@ class CardRead(BaseModel):
     list_id: int
     title: str
     description: str | None
-    position: int
+    position: int | None  # None while archived
     created_at: datetime
+    archived_at: UtcDatetime | None
     due_at: UtcDatetime | None
     due_complete: bool
     label_ids: list[int]
