@@ -481,3 +481,332 @@ def test_move_card_to_other_users_list_returns_422(
     assert card_titles(client, list_id) == ["A"]
     bob_cards = client.get(f"/lists/{bob_list['id']}/cards", headers=other_headers)
     assert bob_cards.json() == []
+
+
+# Details: due date, labels, assignees
+
+DUE = "2026-11-20T17:00:00+07:00"
+DUE_UTC = "2026-11-20T10:00:00Z"
+
+
+def create_label(client: TestClient, board_id: int, name: str = "Bug") -> int:
+    response = client.post(
+        f"/boards/{board_id}/labels", json={"name": name, "color": "red"}
+    )
+    assert response.status_code == 201
+    return response.json()["id"]
+
+
+def me(client: TestClient, headers: dict | None = None) -> int:
+    return client.get("/users/me", headers=headers).json()["id"]
+
+
+def share_with_bob(
+    client: TestClient, board_id: int, headers: dict, role: str = "editor"
+) -> int:
+    response = client.post(
+        f"/boards/{board_id}/members",
+        json={"email": "bob@example.com", "role": role},
+    )
+    assert response.status_code == 201
+    return me(client, headers)
+
+
+def card_board(client: TestClient) -> tuple[int, int]:
+    """A board with one list; returns (board_id, list_id)."""
+    board = create_board(client)
+    return board["id"], create_list(client, board["id"])["id"]
+
+
+def test_new_card_has_no_details(client: TestClient) -> None:
+    _, list_id = card_board(client)
+
+    card = create_card(client, list_id)
+
+    assert card["due_at"] is None
+    assert card["due_complete"] is False
+    assert card["label_ids"] == []
+    assert card["assignee_ids"] == []
+
+
+def test_create_card_with_details(client: TestClient, other_headers: dict) -> None:
+    board_id, list_id = card_board(client)
+    bug = create_label(client, board_id, "Bug")
+    urgent = create_label(client, board_id, "Urgent")
+    bob = share_with_bob(client, board_id, other_headers)
+
+    card = create_card(
+        client,
+        list_id,
+        due_at=DUE,
+        label_ids=[urgent, bug, urgent],
+        assignee_ids=[bob, me(client)],
+    )
+
+    assert card["due_at"] == DUE_UTC
+    assert card["label_ids"] == sorted([bug, urgent])
+    assert card["assignee_ids"] == sorted([bob, me(client)])
+    assert client.get(f"/cards/{card['id']}").json() == card
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"due_at": "2026-11-20T17:00:00"},
+        {"due_at": "next friday"},
+        {"label_ids": None},
+        {"label_ids": ["one"]},
+        {"assignee_ids": None},
+    ],
+)
+def test_create_card_invalid_details(client: TestClient, payload: dict) -> None:
+    _, list_id = card_board(client)
+
+    response = client.post(f"/lists/{list_id}/cards", json={"title": "C", **payload})
+
+    assert response.status_code == 422
+    assert cards_in(client, list_id) == []
+
+
+def test_create_card_with_label_from_another_board(client: TestClient) -> None:
+    _, list_id = card_board(client)
+    other_board = create_board(client, "Other")
+    foreign = create_label(client, other_board["id"])
+
+    response = client.post(
+        f"/lists/{list_id}/cards", json={"title": "C", "label_ids": [foreign]}
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["body", "label_ids"]
+    assert cards_in(client, list_id) == []
+
+
+def test_create_card_assigned_to_someone_off_the_board(
+    client: TestClient, other_headers: dict
+) -> None:
+    _, list_id = card_board(client)
+    bob = me(client, other_headers)  # registered, but not on this board
+
+    for assignee in (bob, 999):
+        response = client.post(
+            f"/lists/{list_id}/cards", json={"title": "C", "assignee_ids": [assignee]}
+        )
+
+        assert response.status_code == 422
+        assert response.json()["detail"][0]["loc"] == ["body", "assignee_ids"]
+    assert cards_in(client, list_id) == []
+
+
+def test_update_card_details(client: TestClient, other_headers: dict) -> None:
+    board_id, list_id = card_board(client)
+    bug = create_label(client, board_id, "Bug")
+    urgent = create_label(client, board_id, "Urgent")
+    bob = share_with_bob(client, board_id, other_headers)
+    card = create_card(client, list_id, label_ids=[bug], assignee_ids=[me(client)])
+
+    response = client.patch(
+        f"/cards/{card['id']}",
+        json={
+            "due_at": DUE,
+            "due_complete": True,
+            "label_ids": [urgent],
+            "assignee_ids": [bob],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["due_at"] == DUE_UTC
+    assert body["due_complete"] is True
+    assert body["label_ids"] == [urgent]
+    assert body["assignee_ids"] == [bob]
+
+
+def test_clear_card_details(client: TestClient) -> None:
+    board_id, list_id = card_board(client)
+    bug = create_label(client, board_id)
+    card = create_card(
+        client, list_id, due_at=DUE, label_ids=[bug], assignee_ids=[me(client)]
+    )
+
+    response = client.patch(
+        f"/cards/{card['id']}",
+        json={"due_at": None, "label_ids": [], "assignee_ids": []},
+    )
+
+    body = response.json()
+    assert body["due_at"] is None
+    assert body["label_ids"] == []
+    assert body["assignee_ids"] == []
+
+
+def test_leaving_out_details_keeps_them(client: TestClient) -> None:
+    board_id, list_id = card_board(client)
+    bug = create_label(client, board_id)
+    card = create_card(
+        client, list_id, due_at=DUE, label_ids=[bug], assignee_ids=[me(client)]
+    )
+    client.patch(f"/cards/{card['id']}", json={"due_complete": True})
+
+    response = client.patch(f"/cards/{card['id']}", json={"title": "Renamed"})
+
+    assert response.json() == {**card, "title": "Renamed", "due_complete": True}
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"due_at": "2026-11-20"},
+        {"due_complete": None},
+        {"due_complete": "yes"},
+        {"label_ids": None},
+        {"assignee_ids": None},
+    ],
+)
+def test_update_card_invalid_details(client: TestClient, payload: dict) -> None:
+    _, list_id = card_board(client)
+    card = create_card(client, list_id)
+
+    response = client.patch(f"/cards/{card['id']}", json=payload)
+
+    assert response.status_code == 422
+    assert client.get(f"/cards/{card['id']}").json() == card
+
+
+def test_invalid_details_cancel_the_whole_update(client: TestClient) -> None:
+    first, second, cards = two_lists(client)
+    other_board = create_board(client, "Other")
+    foreign = create_label(client, other_board["id"])
+
+    response = client.patch(
+        f"/cards/{cards['A']['id']}",
+        json={"title": "Moved", "list_id": second, "label_ids": [foreign]},
+    )
+
+    assert response.status_code == 422
+    assert card_titles(client, first) == ["A", "B", "C"]
+    assert card_titles(client, second) == ["X", "Y"]
+
+
+def test_moving_a_card_keeps_its_details(client: TestClient) -> None:
+    first, second, cards = two_lists(client)
+    board_id = client.get(f"/lists/{first}").json()["board_id"]
+    bug = create_label(client, board_id)
+    client.patch(f"/cards/{cards['A']['id']}", json={"label_ids": [bug]})
+
+    response = client.patch(f"/cards/{cards['A']['id']}", json={"list_id": second})
+
+    assert response.json()["label_ids"] == [bug]
+
+
+# Search a board's cards
+
+
+def search(client: TestClient, board_id: int, **params) -> list[str]:
+    response = client.get(f"/boards/{board_id}/cards", params=params)
+    assert response.status_code == 200
+    return [card["title"] for card in response.json()]
+
+
+@pytest.fixture
+def searchable(client: TestClient, other_headers: dict) -> dict:
+    """Lists First (A, B) and Second (C, D), with labels, assignees and due dates."""
+    board = create_board(client)
+    first = create_list(client, board["id"], "First")
+    second = create_list(client, board["id"], "Second")
+    bug = create_label(client, board["id"], "Bug")
+    alice = me(client)
+    bob = share_with_bob(client, board["id"], other_headers)
+    create_card(
+        client, first["id"], "A", label_ids=[bug], due_at="2026-11-10T00:00:00Z"
+    )
+    create_card(client, first["id"], "B", assignee_ids=[bob])
+    create_card(
+        client,
+        second["id"],
+        "C",
+        label_ids=[bug],
+        assignee_ids=[alice, bob],
+        due_at="2026-11-30T00:00:00Z",
+    )
+    create_card(client, second["id"], "D", assignee_ids=[alice])
+    return {"board": board["id"], "bug": bug, "alice": alice, "bob": bob}
+
+
+def test_search_without_filters_returns_every_card_in_order(
+    client: TestClient, searchable: dict
+) -> None:
+    board_id = searchable["board"]
+    lists = client.get(f"/boards/{board_id}/lists").json()
+    # Board order is list position, then card position.
+    client.patch(f"/lists/{lists[1]['id']}", json={"position": 0})
+
+    assert search(client, board_id) == ["C", "D", "A", "B"]
+
+
+def test_search_filters(client: TestClient, searchable: dict) -> None:
+    board_id = searchable["board"]
+
+    assert search(client, board_id, label_id=searchable["bug"]) == ["A", "C"]
+    assert search(client, board_id, assignee_id=searchable["bob"]) == ["B", "C"]
+    assert search(client, board_id, due_before="2026-11-20T00:00:00Z") == ["A"]
+    assert search(
+        client, board_id, label_id=searchable["bug"], assignee_id=searchable["alice"]
+    ) == ["C"]
+
+
+def test_search_with_ids_from_elsewhere_finds_nothing(
+    client: TestClient, searchable: dict
+) -> None:
+    assert search(client, searchable["board"], label_id=999) == []
+    assert search(client, searchable["board"], assignee_id=999) == []
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"due_before": "2026-11-20T00:00:00"},
+        {"due_before": "soon"},
+        {"label_id": 0},
+        {"assignee_id": "bob"},
+    ],
+)
+def test_search_invalid_filters(
+    client: TestClient, searchable: dict, params: dict
+) -> None:
+    response = client.get(f"/boards/{searchable['board']}/cards", params=params)
+
+    assert response.status_code == 422
+
+
+def test_search_only_returns_that_boards_cards(client: TestClient) -> None:
+    _, list_id = card_board(client)
+    create_card(client, list_id, "Elsewhere")
+    empty = create_board(client, "Empty")
+
+    assert search(client, empty["id"]) == []
+
+
+def test_viewer_can_search(
+    client: TestClient, other_headers: dict, searchable: dict
+) -> None:
+    board_id = searchable["board"]
+    client.patch(
+        f"/boards/{board_id}/members/{searchable['bob']}", json={"role": "viewer"}
+    )
+
+    response = client.get(f"/boards/{board_id}/cards", headers=other_headers)
+
+    assert response.status_code == 200
+    assert len(response.json()) == 4
+
+
+def test_other_users_search_returns_404(
+    client: TestClient, other_headers: dict
+) -> None:
+    board = create_board(client)
+
+    response = client.get(f"/boards/{board['id']}/cards", headers=other_headers)
+
+    assert response.status_code == 404

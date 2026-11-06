@@ -11,6 +11,7 @@ from app.models.board_member import BoardMember, BoardRole
 from app.models.user import User
 from app.realtime.events import EventType, publish
 from app.schemas.board_member import MemberCreate, MemberRead, MemberUpdate
+from app.services.card_details import unassign_from_board
 from app.services.permissions import board_role
 
 router = APIRouter(prefix="/boards/{board_id}/members", tags=["members"])
@@ -99,6 +100,7 @@ def remove_member(
             status_code=status.HTTP_403_FORBIDDEN, detail="Requires the owner role"
         )
     board.members.remove(find_member(board, user_id))  # delete-orphan deletes it
+    unassign_from_board(db, board.id, user_id)
     db.flush()
     # Also closes that user's sockets on this board.
     publish(db, board.id, EventType.MEMBER_REMOVED, {"user_id": user_id})

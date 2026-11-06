@@ -332,6 +332,40 @@ def test_delete_board_deletes_memberships(
     assert db.scalars(select(BoardMember)).all() == []
 
 
+# Removing someone unassigns them
+
+
+def assigned_card(client: TestClient, board_id: int, assignees: list[int]) -> int:
+    board_list = client.post(f"/boards/{board_id}/lists", json={"name": "A"}).json()
+    response = client.post(
+        f"/lists/{board_list['id']}/cards",
+        json={"title": "C", "assignee_ids": assignees},
+    )
+    assert response.status_code == 201
+    return response.json()["id"]
+
+
+@pytest.mark.parametrize("by_owner", [True, False])
+def test_leaving_a_board_unassigns_from_its_cards_only(
+    client: TestClient, other_headers: dict, by_owner: bool
+) -> None:
+    alice = user_id(client, client.headers)
+    bob = user_id(client, other_headers)
+    board = create_board(client, "Shared")
+    other = create_board(client, "Also shared")
+    for item in (board, other):
+        share(client, item["id"], BOB, "editor")
+    here = assigned_card(client, board["id"], [alice, bob])
+    there = assigned_card(client, other["id"], [bob])
+
+    headers = None if by_owner else other_headers
+    response = client.delete(f"/boards/{board['id']}/members/{bob}", headers=headers)
+
+    assert response.status_code == 204
+    assert client.get(f"/cards/{here}").json()["assignee_ids"] == [alice]
+    assert client.get(f"/cards/{there}").json()["assignee_ids"] == [bob]
+
+
 # What each role may do
 
 
@@ -344,7 +378,10 @@ def shared_board(client: TestClient) -> dict:
         for name in "AB"
     }
     card = client.post(f"/lists/{lists['A']['id']}/cards", json={"title": "C"}).json()
-    return {"board": board, "lists": lists, "card": card}
+    label = client.post(
+        f"/boards/{board['id']}/labels", json={"name": "L", "color": "red"}
+    ).json()
+    return {"board": board, "lists": lists, "card": card, "label": label}
 
 
 def snapshot(client: TestClient, ids: dict) -> dict:
@@ -355,6 +392,7 @@ def snapshot(client: TestClient, ids: dict) -> dict:
         "board": client.get(f"/boards/{board_id}").json(),
         "lists": lists,
         "cards": [client.get(f"/lists/{item['id']}/cards").json() for item in lists],
+        "labels": client.get(f"/boards/{board_id}/labels").json(),
     }
 
 
@@ -420,6 +458,45 @@ ACTIONS: dict[str, tuple[Request, int, int]] = {
         200,
     ),
     "delete card": (lambda s: ("DELETE", f"/cards/{s['card']['id']}", None), 403, 204),
+    "set card details": (
+        lambda s: (
+            "PATCH",
+            f"/cards/{s['card']['id']}",
+            {"due_at": "2026-11-20T10:00:00Z", "label_ids": [s["label"]["id"]]},
+        ),
+        403,
+        200,
+    ),
+    "search cards": (
+        lambda s: ("GET", f"/boards/{s['board']['id']}/cards", None),
+        200,
+        200,
+    ),
+    "read labels": (
+        lambda s: ("GET", f"/boards/{s['board']['id']}/labels", None),
+        200,
+        200,
+    ),
+    "read label": (lambda s: ("GET", f"/labels/{s['label']['id']}", None), 200, 200),
+    "create label": (
+        lambda s: (
+            "POST",
+            f"/boards/{s['board']['id']}/labels",
+            {"name": "New", "color": "blue"},
+        ),
+        403,
+        201,
+    ),
+    "change label": (
+        lambda s: ("PATCH", f"/labels/{s['label']['id']}", {"color": "blue"}),
+        403,
+        200,
+    ),
+    "delete label": (
+        lambda s: ("DELETE", f"/labels/{s['label']['id']}", None),
+        403,
+        204,
+    ),
 }
 
 

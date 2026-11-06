@@ -9,6 +9,7 @@ from app.core.database import Base
 if TYPE_CHECKING:
     from app.models.board_list import BoardList
     from app.models.board_member import BoardMember
+    from app.models.label import Label
     from app.models.user import User
 
 
@@ -32,4 +33,9 @@ class Board(Base):
         back_populates="board",
         cascade="all, delete-orphan",
         order_by="BoardMember.created_at",
+    )
+    labels: Mapped[list["Label"]] = relationship(
+        back_populates="board",
+        cascade="all, delete-orphan",
+        order_by="Label.id",
     )
