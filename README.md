@@ -1,5 +1,7 @@
 # Taskboard API
 
+[![CI](https://github.com/lantran-agilityio/taskboard-api/actions/workflows/ci.yml/badge.svg)](https://github.com/lantran-agilityio/taskboard-api/actions/workflows/ci.yml)
+
 A Trello-style task board API built with FastAPI, SQLAlchemy and PostgreSQL: boards, lists and cards.
 
 ## Run
@@ -56,6 +58,8 @@ ws.onclose = (event) => console.log("closed", event.code);
 uv run pytest      # runs against the taskboard_test database
 uv run ruff check .
 ```
+
+GitHub Actions runs the same checks on every pull request and every push to `main` (`.github/workflows/ci.yml`): `ruff check` and `ruff format --check` in one job, and `pytest` against a PostgreSQL 17 service container in another.
 
 ## Roadmap
 

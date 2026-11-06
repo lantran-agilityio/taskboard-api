@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A new push to a branch cancels the run it makes out of date.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: taskboard_test
+        ports:
+          - 5432:5432
+        # Without this the tests could start before Postgres accepts connections.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      # The test-only key conftest.py would use anyway; not a real secret.
+      SECRET_KEY: test-secret-key-at-least-32-bytes-long
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/taskboard_test
+      TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/taskboard_test
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      # The engine fixture builds the schema from the migrations, so there's
+      # no separate alembic step.
+      - run: uv run pytest
