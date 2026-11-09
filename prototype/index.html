@@ -1,12 +1,1482 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Taskboard prototype</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Taskboard Prototype</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: one-screen app. A top bar, a board bar, then lists as lanes that scroll sideways; a card opens as a dialog over the board, menus open as small popovers. */
+:root {
+  --bg: #E6EBE5;
+  --surface: #F8FAF7;
+  --lane: #D7DFD5;
+  --ink: #17201A;
+  --muted: #56645B;
+  --line: #C2CCC0;
+  --accent: #A9570C;
+  --primary: #17201A;
+  --primary-ink: #F8FAF7;
+  --danger: #B42318;
+  --danger-ink: #FFFFFF;
+  --ok: #2B7448;
+  --ok-ink: #FFFFFF;
+  --warn: #F2C46B;
+  --warn-ink: #3A2600;
+  --scrim: rgba(23, 32, 26, .45);
+  --shadow: 0 1px 0 rgba(23, 32, 26, .07), 0 6px 18px -10px rgba(23, 32, 26, .35);
+  --shadow-lg: 0 24px 60px -20px rgba(23, 32, 26, .45);
+  --l-green: #3B9461; --l-yellow: #D8B02A; --l-orange: #DC7330; --l-red: #CD4338;
+  --l-purple: #8657C2; --l-blue: #3B78C7; --l-teal: #23918F; --l-grey: #7E8A82;
+  --f-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111613; --surface: #1C231F; --lane: #171E1A; --ink: #E3EAE3; --muted: #98A59B; --line: #313C35;
+    --accent: #E59A4E; --primary: #E3EAE3; --primary-ink: #141A16;
+    --danger: #F0877C; --danger-ink: #2B0905; --ok: #6FC892; --ok-ink: #0B2414; --warn: #E6B45C; --warn-ink: #2B1C00;
+    --scrim: rgba(0, 0, 0, .6);
+    --shadow: 0 1px 0 rgba(0, 0, 0, .3), 0 6px 18px -10px rgba(0, 0, 0, .8);
+    --shadow-lg: 0 24px 60px -20px rgba(0, 0, 0, .9);
+    --l-green: #3E8E5F; --l-yellow: #C9A42C; --l-orange: #C96A2E; --l-red: #BF4439;
+    --l-purple: #7C55B5; --l-blue: #3A70B8; --l-teal: #23847F; --l-grey: #6E7A72;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111613; --surface: #1C231F; --lane: #171E1A; --ink: #E3EAE3; --muted: #98A59B; --line: #313C35;
+  --accent: #E59A4E; --primary: #E3EAE3; --primary-ink: #141A16;
+  --danger: #F0877C; --danger-ink: #2B0905; --ok: #6FC892; --ok-ink: #0B2414; --warn: #E6B45C; --warn-ink: #2B1C00;
+  --scrim: rgba(0, 0, 0, .6);
+  --shadow: 0 1px 0 rgba(0, 0, 0, .3), 0 6px 18px -10px rgba(0, 0, 0, .8);
+  --shadow-lg: 0 24px 60px -20px rgba(0, 0, 0, .9);
+  --l-green: #3E8E5F; --l-yellow: #C9A42C; --l-orange: #C96A2E; --l-red: #BF4439;
+  --l-purple: #7C55B5; --l-blue: #3A70B8; --l-teal: #23847F; --l-grey: #6E7A72;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 var(--f-body); -webkit-font-smoothing: antialiased; }
+#app { height: 100%; display: flex; flex-direction: column; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h1, h2, h3 { margin: 0; text-wrap: balance; }
+svg { flex: none; }
+.grow { flex: 1; }
+.muted { color: var(--muted); }
+.gutter { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+/* requirement chips */
+.req { display: none; align-items: center; gap: 4px; font: 500 10px/1.3 var(--f-mono); letter-spacing: .02em; color: var(--accent); border: 1px solid color-mix(in oklab, var(--accent) 45%, transparent); border-radius: 4px; padding: 2px 5px; vertical-align: middle; max-width: 100%; justify-self: start; overflow-wrap: anywhere; }
+/* grid containers get a shrinkable column, so a wide child wraps instead of pushing past the padding */
+.home-inner, .sec, .dlg-main, .dlg-side, .blk, .feed, .panel-body, .modal, .pop { grid-template-columns: minmax(0, 1fr); }
+body.show-req .req { display: inline-flex; }
+
+/* buttons and fields */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 12px; font-weight: 500; line-height: 1.3; }
+.btn:hover:not([disabled]) { border-color: var(--muted); }
+.btn.primary { background: var(--primary); color: var(--primary-ink); border-color: var(--primary); }
+.btn.danger { background: var(--danger); color: var(--danger-ink); border-color: var(--danger); }
+.btn.sm { padding: 4px 9px; font-size: 13px; }
+.btn.wide { width: 100%; }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+.ghost { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; border-radius: 8px; padding: 6px 8px; color: var(--muted); text-decoration: none; }
+.ghost:hover { background: color-mix(in oklab, var(--ink) 8%, transparent); color: var(--ink); }
+.ghost.sm { padding: 4px 6px; }
+.field { width: 100%; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 7px 10px; }
+.field:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+textarea.field { resize: vertical; min-height: 84px; line-height: 1.45; }
+label.lab { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.err { color: var(--danger); font-size: 13px; margin: 0; }
+.hint { color: var(--muted); font-size: 13px; margin: 0; }
+.x { background: none; border: 0; color: var(--muted); font-size: 20px; line-height: 1; padding: 2px 6px; border-radius: 6px; }
+.x:hover { background: color-mix(in oklab, var(--ink) 8%, transparent); color: var(--ink); }
+
+/* top bar */
+.top { display: flex; align-items: center; gap: 12px; padding-block: 10px; border-bottom: 1px solid var(--line); background: var(--surface); flex: none; }
+.brand { display: inline-flex; align-items: center; gap: 8px; font: 700 18px/1 var(--f-display); letter-spacing: -.01em; text-decoration: none; }
+.brand svg { color: var(--accent); }
+.proto { font: 500 11px/1 var(--f-mono); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.toggle { border: 1px solid var(--line); background: none; border-radius: 999px; padding: 5px 11px; font: 500 12px/1 var(--f-mono); color: var(--muted); }
+.toggle[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+@media (max-width: 640px) { .proto { display: none; } }
+
+/* avatars */
+.av { --c: var(--l-blue); display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: color-mix(in oklab, var(--c) 25%, var(--surface)); border: 1.5px solid color-mix(in oklab, var(--c) 75%, var(--surface)); color: var(--ink); font: 600 11px/1 var(--f-body); flex: none; }
+.av.sm { width: 22px; height: 22px; font-size: 9.5px; }
+.avs { display: flex; }
+.avs .av + .av { margin-left: -6px; }
+
+/* home */
+.home { flex: 1; overflow-y: auto; }
+.home-inner { max-width: 1040px; margin: 0 auto; padding-block: 28px 48px; display: grid; gap: 28px; }
+.home h1 { font: 700 30px/1.1 var(--f-display); letter-spacing: -.02em; }
+.sec { display: grid; gap: 12px; }
+.sec-head { display: flex; align-items: center; gap: 10px; }
+.sec-head h2 { font: 600 13px/1 var(--f-body); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+.tile { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; min-height: 112px; display: flex; }
+.tile:hover { border-color: var(--muted); }
+.tile-link { flex: 1; display: grid; align-content: space-between; gap: 14px; padding: 14px; text-decoration: none; min-width: 0; }
+.tile-name { font: 600 17px/1.2 var(--f-display); padding-right: 28px; overflow-wrap: anywhere; }
+.tile-meta { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; font: 500 11px/1 var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.spark { display: flex; align-items: flex-end; gap: 3px; height: 26px; }
+.spark i { width: 7px; border-radius: 2px; background: var(--lane); border-top: 3px solid var(--accent); }
+.tile .star { position: absolute; top: 8px; right: 8px; }
+.tile-new { border-style: dashed; background: none; align-items: center; justify-content: center; color: var(--muted); font-weight: 600; min-height: 112px; border-radius: 12px; border: 1.5px dashed var(--line); }
+.tile-new:hover { color: var(--ink); border-color: var(--muted); }
+.star { background: none; border: 0; padding: 4px; border-radius: 6px; color: var(--muted); line-height: 0; }
+.star:hover { background: color-mix(in oklab, var(--ink) 8%, transparent); }
+.star.on { color: var(--accent); }
+.star.on svg path { fill: currentColor; }
+
+/* board */
+.boardwrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.boardbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding-block: 12px 10px; flex: none; }
+.board-title { font: 700 22px/1.2 var(--f-display); letter-spacing: -.015em; background: none; border: 0; padding: 2px 6px; margin-left: -6px; border-radius: 6px; text-align: left; overflow-wrap: anywhere; }
+.board-title:not([disabled]):hover { background: color-mix(in oklab, var(--ink) 8%, transparent); }
+.board-title[disabled] { cursor: default; opacity: 1; }
+.title-input { font: 700 22px/1.2 var(--f-display); letter-spacing: -.015em; border: 0; border-radius: 6px; padding: 2px 6px; margin-left: -6px; background: var(--surface); outline: 2px solid var(--accent); min-width: 0; width: min(420px, 70vw); }
+.banner { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-block: 8px; background: color-mix(in oklab, var(--warn) 45%, var(--surface)); color: var(--ink); font-weight: 500; flex: none; }
+.lanes { flex: 1; min-height: 0; overflow-x: auto; overflow-y: hidden; display: flex; align-items: flex-start; gap: 12px; padding-block: 4px 18px; }
+.lanes.drop-end::after { content: ""; flex: 0 0 4px; align-self: stretch; background: var(--accent); border-radius: 2px; }
+.list { flex: 0 0 276px; max-height: 100%; display: flex; flex-direction: column; gap: 8px; background: var(--lane); border-radius: 12px; padding: 8px; }
+.list.dragging { opacity: .45; }
+.list.drop-before { box-shadow: -8px 0 0 -4px var(--accent); }
+.list-head { display: flex; align-items: center; gap: 6px; padding: 2px 2px 0 4px; }
+.list-head[draggable="true"] { cursor: grab; }
+.list-head h2 { flex: 1; min-width: 0; }
+.list-name { width: 100%; text-align: left; background: none; border: 0; font: 600 15px/1.25 var(--f-display); padding: 4px 4px; border-radius: 6px; overflow-wrap: anywhere; }
+.list-name:not([disabled]):hover { background: color-mix(in oklab, var(--ink) 8%, transparent); }
+.list-name[disabled] { cursor: default; opacity: 1; }
+.list-input { flex: 1; font: 600 15px/1.25 var(--f-display); border: 0; border-radius: 6px; padding: 4px; outline: 2px solid var(--accent); background: var(--surface); min-width: 0; }
+.count { font: 500 12px/1 var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; padding: 3px 6px; border-radius: 5px; background: color-mix(in oklab, var(--ink) 7%, transparent); }
+.cards { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; min-height: 6px; padding: 2px; margin: -2px; }
+.cards.drop-end::after { content: ""; height: 4px; background: var(--accent); border-radius: 2px; }
+.add-card { text-align: left; background: none; border: 0; color: var(--muted); padding: 7px 8px; border-radius: 8px; font-weight: 500; }
+.add-card:hover { background: color-mix(in oklab, var(--ink) 8%, transparent); color: var(--ink); }
+.list-add { flex: 0 0 276px; }
+.list-add > .add-list-btn { width: 100%; text-align: left; border: 1.5px dashed var(--line); background: none; border-radius: 12px; padding: 12px; color: var(--muted); font-weight: 600; }
+.list-add > .add-list-btn:hover { color: var(--ink); border-color: var(--muted); }
+.mini-form { display: grid; gap: 8px; background: var(--lane); border-radius: 12px; padding: 8px; }
+.list .mini-form { padding: 0; background: none; }
+
+/* card front */
+.card { position: relative; background: var(--surface); border-radius: 9px; padding: 8px 10px; box-shadow: var(--shadow); cursor: pointer; display: grid; gap: 6px; border: 1px solid transparent; }
+.card:hover { border-color: var(--line); }
+.card.dragging { opacity: .4; }
+.card.drop-before { box-shadow: 0 -6px 0 -2px var(--accent), var(--shadow); }
+.card-lbls { display: flex; flex-wrap: wrap; gap: 4px; }
+.card-title-row { display: flex; align-items: flex-start; gap: 6px; }
+.card-title { flex: 1; min-width: 0; overflow-wrap: anywhere; line-height: 1.35; }
+.is-done .card-title { color: var(--muted); }
+.done-tog { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-top: 1px; border-radius: 50%; border: 1.5px solid var(--muted); background: none; padding: 0; color: transparent; flex: none; }
+.done-tog.on { background: var(--ok); border-color: var(--ok); color: var(--ok-ink); }
+.card:not(.is-done) .done-tog { opacity: 0; width: 0; margin-right: -6px; border-width: 0; transition: width .12s, opacity .12s; }
+.card:hover .done-tog, .card:focus-within .done-tog { opacity: 1; width: 18px; margin-right: 0; border-width: 1.5px; }
+@media (hover: none) { .card:not(.is-done) .done-tog { opacity: 1; width: 18px; margin-right: 0; border-width: 1.5px; } }
+.badges { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font: 500 12px/1 var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.badge { display: inline-flex; align-items: center; gap: 4px; }
+.badges .avs { margin-left: auto; }
+.cardno { font: 500 11px/1 var(--f-mono); color: var(--muted); }
+.quick-arch { position: absolute; top: 6px; right: 6px; border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 3px; line-height: 0; color: var(--muted); opacity: 0; }
+.card:hover .quick-arch, .card:focus-within .quick-arch { opacity: 1; }
+@media (hover: none) { .quick-arch { opacity: 1; } }
+
+/* labels */
+.lbl { --c: var(--l-grey); --t: #FFFFFF; display: inline-flex; align-items: center; min-height: 22px; min-width: 44px; padding: 3px 8px; border-radius: 5px; background: var(--c); color: var(--t); font: 600 12px/1.2 var(--f-body); overflow-wrap: anywhere; }
+.lbl.yellow { --t: #2A2200; }
+.lbl.none { background: transparent; border: 1.5px dashed var(--muted); color: var(--ink); }
+.lbl.lg { min-height: 30px; min-width: 120px; font-size: 14px; }
+.lbl.mini { min-height: 8px; min-width: 36px; padding: 0 6px; font-size: 11px; }
+.lbl.mini:empty { height: 8px; padding: 0; }
+
+/* due badge */
+.due { display: inline-flex; align-items: center; gap: 5px; font: 500 12px/1 var(--f-mono); padding: 3px 6px; border-radius: 5px; font-variant-numeric: tabular-nums; }
+.due.overdue { background: var(--danger); color: var(--danger-ink); }
+.due.complete { background: var(--ok); color: var(--ok-ink); }
+.due.soon { background: var(--warn); color: var(--warn-ink); }
+.due.upcoming { background: color-mix(in oklab, var(--ink) 8%, transparent); color: var(--ink); }
+.due b { font: 600 10px/1 var(--f-body); text-transform: uppercase; letter-spacing: .05em; }
+
+/* overlays */
+.scrim { position: fixed; inset: 0; z-index: 40; background: var(--scrim); display: flex; justify-content: center; align-items: flex-start; overflow-y: auto; padding: 5vh 16px 32px; }
+.scrim.modal-z { z-index: 45; }
+.scrim.confirm-z { z-index: 80; align-items: center; }
+.dialog { background: var(--bg); width: min(900px, 100%); border-radius: 14px; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; }
+.modal { background: var(--surface); width: min(480px, 100%); border-radius: 14px; box-shadow: var(--shadow-lg); padding: 18px; display: grid; gap: 14px; }
+.modal h2 { font: 700 20px/1.2 var(--f-display); }
+.modal-head { display: flex; align-items: center; gap: 8px; }
+.modal-head h2 { flex: 1; }
+.dlg-top { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.in-list { font-size: 13px; }
+.in-list b { font-weight: 600; }
+.arch-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 16px; background: color-mix(in oklab, var(--warn) 45%, var(--surface)); font-weight: 500; }
+.dlg-body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; }
+.dlg-main { padding: 16px 18px 22px; display: grid; gap: 18px; align-content: start; min-width: 0; }
+.dlg-side { padding: 16px; border-left: 1px solid var(--line); display: grid; gap: 12px; align-content: start; min-width: 0; background: color-mix(in oklab, var(--lane) 50%, var(--bg)); border-bottom-right-radius: 14px; }
+@media (max-width: 780px) { .dlg-body { grid-template-columns: 1fr; } .dlg-side { border-left: 0; border-top: 1px solid var(--line); border-bottom-left-radius: 14px; } .scrim { padding: 0; } .dialog { border-radius: 0; min-height: 100%; } }
+.card-h { display: flex; align-items: flex-start; gap: 10px; }
+.card-h .done-tog { width: 22px; height: 22px; margin-top: 5px; }
+.card-h-title { font: 700 24px/1.2 var(--f-display); letter-spacing: -.015em; background: none; border: 0; padding: 2px 6px; margin-left: -6px; border-radius: 6px; text-align: left; overflow-wrap: anywhere; }
+.card-h-title:not([disabled]):hover { background: color-mix(in oklab, var(--ink) 8%, transparent); }
+.card-h-title[disabled] { cursor: default; opacity: 1; }
+.is-done .card-h-title { color: var(--muted); }
+.detail-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.facts { display: flex; flex-wrap: wrap; gap: 16px 22px; }
+.fact { display: grid; gap: 6px; align-content: start; }
+.fact > span:first-child, .blk-head h3 { font: 600 12px/1 var(--f-body); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.fact .row { gap: 6px; }
+.addsq { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); }
+.addsq:hover { color: var(--ink); border-color: var(--muted); }
+.blk { display: grid; gap: 10px; }
+.blk-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.blk-head h3 { flex: 1; }
+.blk-head h3.big { font: 600 16px/1.2 var(--f-display); text-transform: none; letter-spacing: 0; color: var(--ink); }
+.rich { overflow-wrap: anywhere; }
+.rich p { margin: 0 0 6px; }
+.rich ul { margin: 0 0 6px; padding-left: 20px; }
+.desc-view { background: none; border: 0; text-align: left; padding: 0; width: 100%; }
+.desc-empty { display: block; width: 100%; text-align: left; border: 1px dashed var(--line); background: var(--surface); border-radius: 8px; padding: 12px; color: var(--muted); }
+.toolbar { display: flex; gap: 4px; }
+.toolbar button { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; min-width: 30px; padding: 3px 7px; font-size: 13px; }
+.progress { display: flex; align-items: center; gap: 10px; font: 500 12px/1 var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.bar { flex: 1; height: 8px; border-radius: 4px; background: color-mix(in oklab, var(--ink) 10%, transparent); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.bar i.full { background: var(--ok); }
+.items { display: grid; gap: 2px; }
+.item { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px; }
+.item:hover { background: color-mix(in oklab, var(--ink) 5%, transparent); }
+.item input { width: 16px; height: 16px; accent-color: var(--ok); flex: none; }
+.item .t { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.item.done .t { text-decoration: line-through; color: var(--muted); }
+.item-meta { display: inline-flex; align-items: center; gap: 6px; font: 500 11px/1 var(--f-mono); color: var(--muted); }
+
+/* feed */
+.feed { display: grid; gap: 12px; }
+.ev { display: flex; gap: 8px; font-size: 13.5px; }
+.ev > div { min-width: 0; flex: 1; }
+.ev time { display: block; font: 500 11px/1.4 var(--f-mono); color: var(--muted); }
+.cmt-body { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-top: 4px; }
+.cmt-acts { display: flex; gap: 2px; margin-top: 2px; flex-wrap: wrap; }
+.cmt-acts .ghost { font-size: 12.5px; padding: 3px 6px; }
+.ev.hl .cmt-body { outline: 2px solid var(--accent); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { background: none; border: 0; padding: 5px 10px; font-size: 13px; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--primary); color: var(--primary-ink); }
+
+/* popover */
+.pop { position: fixed; z-index: 60; top: 8px; left: 8px; width: 304px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-lg); padding: 12px; display: grid; gap: 10px; }
+.pop-head { display: flex; align-items: center; gap: 6px; }
+.pop-head h3 { flex: 1; font: 600 15px/1.2 var(--f-display); text-align: center; }
+.menu { display: grid; gap: 2px; }
+.menu button { text-align: left; background: none; border: 0; border-radius: 6px; padding: 7px 8px; }
+.menu button:hover { background: color-mix(in oklab, var(--ink) 8%, transparent); }
+.menu button.danger-text { color: var(--danger); }
+.menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
+.lbl-row { display: flex; align-items: center; gap: 6px; }
+.lbl-check { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; cursor: pointer; }
+.lbl-check .lbl { flex: 1; }
+.lbl-check input { width: 16px; height: 16px; accent-color: var(--primary); }
+.palette { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; border: 0; padding: 0; margin: 0; }
+.palette legend { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 4px; padding: 0; }
+.swatch { position: relative; }
+.swatch input { position: absolute; opacity: 0; inset: 0; }
+.swatch span { display: block; height: 30px; border-radius: 6px; background: var(--c); border: 2px solid transparent; }
+.swatch span.none { background: transparent; border: 1.5px dashed var(--muted); font-size: 11px; display: grid; place-items: center; color: var(--muted); }
+.swatch input:checked + span { border-color: var(--ink); box-shadow: inset 0 0 0 2px var(--surface); }
+.swatch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mrow { display: flex; align-items: center; gap: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; }
+.mrow:hover { background: color-mix(in oklab, var(--ink) 6%, transparent); }
+.mrow input { width: 16px; height: 16px; accent-color: var(--primary); }
+
+/* board panel */
+.panel { position: fixed; z-index: 30; top: 0; right: 0; bottom: 0; width: min(360px, 100%); background: var(--surface); border-left: 1px solid var(--line); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); padding-right: env(safe-area-inset-right, 0px); }
+.panel-head { display: flex; align-items: center; gap: 8px; padding: 14px 14px 10px; }
+.panel-head h2 { flex: 1; font: 700 18px/1.2 var(--f-display); }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 14px 10px; border-bottom: 1px solid var(--line); }
+.tabs button { background: none; border: 0; border-radius: 6px; padding: 6px 9px; font-size: 13.5px; color: var(--muted); font-weight: 500; }
+.tabs button[aria-current="true"] { background: var(--primary); color: var(--primary-ink); }
+.panel-body { flex: 1; overflow-y: auto; padding: 14px; display: grid; gap: 14px; align-content: start; }
+.panel-foot { padding: 12px 14px; border-top: 1px solid var(--line); display: grid; gap: 6px; }
+.arow { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.arow > div { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.arow small { display: block; font: 500 11px/1.4 var(--f-mono); color: var(--muted); }
+.empty { padding: 18px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 10px; }
+
+/* members */
+.member { display: flex; align-items: center; gap: 10px; padding: 6px 0; flex-wrap: wrap; }
+.member > div { flex: 1; min-width: 120px; }
+.member small { display: block; color: var(--muted); font-size: 12.5px; }
+.member select, .invite select { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 5px 8px; }
+.invite { display: flex; gap: 8px; flex-wrap: wrap; }
+.invite .field { flex: 1; min-width: 160px; }
+.tag { font: 600 10.5px/1 var(--f-body); text-transform: uppercase; letter-spacing: .06em; color: var(--accent); }
+
+.toast { position: fixed; z-index: 90; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--primary); color: var(--primary-ink); padding: 9px 16px; border-radius: 999px; font-weight: 500; box-shadow: var(--shadow-lg); max-width: calc(100vw - 32px); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
 </head>
 <body>
-  <!-- Placeholder: the prototype is built in roadmap step 14, from docs/requirements.md only. -->
-  <p>The clickable prototype is built in roadmap step 14 from <code>docs/requirements.md</code>.</p>
+<div id="app"></div>
+<script>
+'use strict';
+/* Taskboard prototype: in-memory sample data, nothing is saved. Built from docs/requirements.md only.
+   Requirement IDs are shown as chips next to the controls that cover them. */
+
+const MIN = 6e4, HOUR = 36e5, DAY = 864e5, NOW = Date.now();
+const ME = 'u1';
+const users = { u1: { name: 'Mai Pham' }, u2: { name: 'Duc Le' }, u3: { name: 'Hana Ito' }, u4: { name: 'Tomas Vega' } };
+const PALETTE = ['green', 'yellow', 'orange', 'red', 'purple', 'blue', 'teal', 'grey'];
+const DEFAULT_COLORS = PALETTE.slice(0, 6);
+const AV_COLORS = ['blue', 'purple', 'teal', 'orange', 'green', 'red'];
+let nid = 1000;
+const uid = (p) => p + (++nid);
+const ago = (d) => NOW - d;
+
+/* ---------- sample data ---------- */
+function makeCard(b, title, listName, o = {}) {
+  const created = o.created ?? Date.now();
+  return {
+    num: ++b.cardSeq, title, desc: o.desc || '', done: !!o.done, labels: o.labels || [],
+    due: o.due ?? null, start: o.start ?? null, members: o.members || [], checklists: o.checklists || [],
+    comments: o.comments || [], archived: !!o.archived, archivedAt: o.archivedAt ?? null, created,
+    activity: [{ u: o.by || ME, text: `added this card to ${listName}`, at: created }].concat(o.activity || []),
+  };
+}
+function makeList(title, archived = false) {
+  return { id: uid('L'), title, archived, archivedAt: archived ? ago(5 * DAY) : null, cards: [] };
+}
+function checklist(title, items) {
+  return { id: uid('k'), title, hideChecked: false, items: items.map(([t, done, o = {}]) => ({ id: uid('i'), t, done, assignee: o.assignee || null, due: o.due || null })) };
+}
+function seed() {
+  const b1 = {
+    id: 'b1', title: 'Spring launch', starred: true, closed: false, closedAt: null, cardSeq: 0,
+    desc: 'Everything we need to open the spring collection on 20 March: photos, copy, the launch email and the shop fixes.',
+    members: [{ u: 'u1', role: 'admin', creator: true }, { u: 'u2', role: 'member' }, { u: 'u3', role: 'member' }],
+    labels: [
+      { id: 'l1', name: 'Design', color: 'purple' }, { id: 'l2', name: 'Copy', color: 'yellow' },
+      { id: 'l3', name: 'Bug', color: 'red' }, { id: 'l4', name: '', color: 'green' },
+      { id: 'l5', name: '', color: 'blue' }, { id: 'l6', name: '', color: 'orange' },
+      { id: 'l7', name: 'Waiting on supplier', color: null },
+    ],
+    lists: [], activity: [],
+  };
+  const ideas = makeList('Ideas'), old = makeList('Old backlog', true), week = makeList('This week'), review = makeList('In review'), shipped = makeList('Shipped');
+  b1.lists = [ideas, old, week, review, shipped];
+  ideas.cards.push(
+    makeCard(b1, 'Pop-up shop at the central station', 'Ideas', { created: ago(8 * DAY), labels: ['l4'], by: 'u2' }),
+    makeCard(b1, 'Customer survey questions', 'Ideas', { created: ago(7 * DAY), labels: ['l2'], desc: 'Five questions at most. Ask about **delivery times** first.' }),
+  );
+  old.cards.push(makeCard(b1, 'Holiday gift guide', 'Old backlog', { created: ago(30 * DAY) }));
+  week.cards.push(
+    makeCard(b1, 'Hero photo for the homepage', 'This week', {
+      created: ago(6 * DAY), labels: ['l1'], due: ago(20 * HOUR), members: ['u2', 'u1'],
+      checklists: [checklist('Shots', [['Window display, morning light', true], ['Close-up of the linen range', true], ['Team photo', false], ['Pick the final crop', false, { assignee: 'u3', due: NOW + 2 * DAY }]])],
+      comments: [
+        { id: 1, u: 'u2', text: 'Morning light was better than expected. Uploading the raw set tonight.', at: ago(5 * HOUR) },
+        { id: 2, u: 'u1', text: 'Great. Can we try one **wider** shot for the banner?', at: ago(3 * HOUR), edited: true },
+      ],
+      activity: [{ u: 'u1', text: 'set the due date to yesterday at 4:00 PM', at: ago(4 * DAY) }, { u: 'u2', text: 'joined this card', at: ago(4 * DAY) }],
+    }),
+    makeCard(b1, 'Fix the checkout button on small phones', 'This week', {
+      created: ago(2 * DAY), labels: ['l3'], due: NOW + 5 * HOUR, members: ['u1'],
+      desc: 'On a 360 px screen the **Pay now** button sits under the cookie bar.\n- Seen on Android\n- Not seen on iOS',
+    }),
+    makeCard(b1, 'Old promo code banner', 'This week', { created: ago(9 * DAY), archived: true, archivedAt: ago(2 * DAY) }),
+  );
+  review.cards.push(makeCard(b1, 'Launch email draft', 'In review', {
+    created: ago(5 * DAY), labels: ['l2', 'l5'], due: NOW + 3 * DAY, members: ['u3'],
+    desc: 'Goes to the full list at 9:00 on launch day.',
+    checklists: [checklist('Review', [['Check the prices', true], ['Every link works', false], ['Legal footer', false]])],
+    comments: [{ id: 3, u: 'u3', text: 'First draft is in. The subject line is still open.', at: ago(DAY) }],
+  }));
+  shipped.cards.push(
+    makeCard(b1, 'Price list for stockists', 'Shipped', { created: ago(12 * DAY), done: true, due: ago(2 * DAY), labels: ['l5'] }),
+    makeCard(b1, 'New product photos', 'Shipped', { created: ago(11 * DAY), done: true, labels: ['l1', 'l7'] }),
+  );
+  b1.nextComment = 4;
+  b1.activity = [
+    { u: 'u1', text: 'created this board', at: ago(14 * DAY) },
+    { u: 'u1', text: 'added Duc Le to this board', at: ago(14 * DAY) },
+    { u: 'u1', text: 'added Hana Ito to this board', at: ago(13 * DAY) },
+    { u: 'u1', text: 'renamed this board (was “Spring collection”)', at: ago(6 * DAY) },
+    { u: 'u1', text: 'archived the list Old backlog', at: ago(5 * DAY) },
+    { u: 'u1', text: 'archived “Old promo code banner”', at: ago(2 * DAY), card: 6 },
+    { u: 'u3', text: 'commented on “Launch email draft”', at: ago(DAY), comment: true, card: 7 },
+    { u: 'u2', text: 'commented on “Hero photo for the homepage”', at: ago(5 * HOUR), comment: true, card: 4 },
+    { u: 'u1', text: 'commented on “Hero photo for the homepage”', at: ago(3 * HOUR), comment: true, card: 4 },
+  ];
+
+  const b2 = {
+    id: 'b2', title: 'Office move', starred: false, closed: false, closedAt: null, cardSeq: 0, nextComment: 1,
+    desc: 'Moving to the new floor on the 28th.',
+    members: [{ u: 'u4', role: 'admin', creator: true }, { u: 'u1', role: 'member' }],
+    labels: DEFAULT_COLORS.map((c) => ({ id: uid('l'), name: '', color: c })), lists: [], activity: [],
+  };
+  const pack = makeList('To pack'), moved = makeList('Moved');
+  b2.lists = [pack, moved];
+  pack.cards.push(
+    makeCard(b2, 'Label the archive boxes', 'To pack', { created: ago(3 * DAY), by: 'u4' }),
+    makeCard(b2, 'Book the van for Saturday', 'To pack', { created: ago(2 * DAY), due: NOW + 2 * DAY, by: 'u4', members: ['u1'] }),
+  );
+  moved.cards.push(makeCard(b2, 'Plants', 'Moved', { created: ago(DAY), done: true }));
+  b2.activity = [{ u: 'u4', text: 'created this board', at: ago(4 * DAY) }, { u: 'u4', text: 'added Mai Pham to this board', at: ago(4 * DAY) }];
+
+  const b3 = {
+    id: 'b3', title: 'Reading club', starred: false, closed: true, closedAt: ago(12 * DAY), cardSeq: 0, nextComment: 1, desc: '',
+    members: [{ u: 'u1', role: 'admin', creator: true }],
+    labels: DEFAULT_COLORS.map((c) => ({ id: uid('l'), name: '', color: c })), lists: [], activity: [],
+  };
+  const next = makeList('Next up');
+  b3.lists = [next];
+  next.cards.push(makeCard(b3, 'Pick the March book', 'Next up', { created: ago(40 * DAY) }));
+  b3.activity = [{ u: 'u1', text: 'created this board', at: ago(60 * DAY) }, { u: 'u1', text: 'closed this board', at: ago(12 * DAY) }];
+
+  return { boards: [b1, b2, b3] };
+}
+
+const state = seed();
+let showReq = true;
+try { const v = localStorage.getItem('taskboard-proto-req'); if (v !== null) showReq = v === '1'; } catch (e) { /* storage unavailable */ }
+const ui = {
+  showReq, recent: ['b1', 'b2'], panel: null, archTab: 'cards', actFilter: 'all', modal: null, pop: null,
+  confirm: null, toast: null, edit: null, addList: false, addCard: null, addItem: null, descEdit: false,
+  aboutEdit: false, editComment: null, showDetails: true, focus: null, select: false, drag: null, drop: null,
+};
+let confirmFn = null, toastTimer = null;
+let route = parseHash();
+
+/* ---------- helpers ---------- */
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const inline = (s) => s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/(^|[\s(])_(.+?)_(?=[\s.,;:!?)]|$)/g, '$1<em>$2</em>');
+function rich(t) {
+  let out = '', list = false;
+  for (const line of esc(t).split('\n')) {
+    if (/^- /.test(line)) { if (!list) { out += '<ul>'; list = true; } out += `<li>${inline(line.slice(2))}</li>`; }
+    else { if (list) { out += '</ul>'; list = false; } if (line.trim()) out += `<p>${inline(line)}</p>`; }
+  }
+  return out + (list ? '</ul>' : '');
+}
+function when(t) {
+  const d = Date.now() - t;
+  if (d < 45e3) return 'just now';
+  if (d < HOUR) return `${Math.round(d / MIN)} min ago`;
+  if (d < DAY) return `${Math.round(d / HOUR)} h ago`;
+  const n = Math.round(d / DAY);
+  return n === 1 ? 'yesterday' : `${n} days ago`;
+}
+const clock = (t) => new Date(t).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+const shortDate = (t) => new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+function dayWords(t) {
+  const d = new Date(t), today = new Date(); today.setHours(0, 0, 0, 0);
+  const diff = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - today) / DAY);
+  const day = diff === 0 ? 'today' : diff === 1 ? 'tomorrow' : diff === -1 ? 'yesterday' : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  return `${day} at ${clock(t)}`;
+}
+const pad = (n) => String(n).padStart(2, '0');
+const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const hm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+function dueState(c) {
+  if (!c.due) return null;
+  if (c.done) return 'complete';
+  if (c.due < Date.now()) return 'overdue';
+  return c.due - Date.now() < DAY ? 'soon' : 'upcoming';
+}
+const DUE_WORD = { overdue: 'Overdue', complete: 'Complete', soon: 'Due soon', upcoming: '' };
+function dueBadge(c, long = false) {
+  const s = dueState(c);
+  if (!s) return '';
+  const text = long ? `${shortDate(c.due)}, ${clock(c.due)}` : shortDate(c.due);
+  return `<span class="due ${s}">${CLOCK}${esc(text)}${long && DUE_WORD[s] ? ` <b>${DUE_WORD[s]}</b>` : ''}</span>`;
+}
+
+const byId = (id) => state.boards.find((b) => b.id === id);
+const B = () => (route.view === 'board' ? byId(route.b) : null);
+const active = (arr) => arr.filter((x) => !x.archived);
+const myRole = (b) => b.members.find((m) => m.u === ME)?.role || null;
+const isAdmin = (b) => myRole(b) === 'admin';
+const canEdit = (b) => !!myRole(b) && !b.closed;
+const adminCount = (b) => b.members.filter((m) => m.role === 'admin').length;
+function findCard(b, num) {
+  for (const l of b.lists) { const c = l.cards.find((x) => x.num === num); if (c) return { card: c, list: l }; }
+  return null;
+}
+function logBoard(b, text, o = {}) { b.activity.push({ u: ME, text, at: Date.now(), comment: !!o.comment, card: o.card ?? null }); }
+function logCard(c, text) { c.activity.push({ u: ME, text, at: Date.now() }); }
+function avatar(u, cls = '') {
+  const i = Object.keys(users).indexOf(u);
+  const name = users[u]?.name || 'Someone';
+  const ini = name.split(/\s+/).map((s) => s[0]).join('').slice(0, 2).toUpperCase();
+  return `<span class="av ${cls}" style="--c: var(--l-${AV_COLORS[i % AV_COLORS.length]})" title="${esc(name)}" aria-label="${esc(name)}">${esc(ini)}</span>`;
+}
+const R = (...ids) => `<span class="req" aria-hidden="true">${ids.join(' · ')}</span>`;
+function chip(l, cls = '') {
+  if (!l) return '';
+  const color = l.color ? `${l.color}" style="--c: var(--l-${l.color})` : 'none';
+  return `<span class="lbl ${cls} ${color}">${esc(l.name)}</span>`;
+}
+const labelSort = (a, b) => (a.color ? PALETTE.indexOf(a.color) : 99) - (b.color ? PALETTE.indexOf(b.color) : 99);
+function toast(msg) {
+  // Shown and removed straight in the DOM, so a toast never re-renders over half-typed text.
+  ui.toast = msg; clearTimeout(toastTimer);
+  document.querySelector('.toast')?.remove();
+  const el = document.createElement('div');
+  el.className = 'toast'; el.setAttribute('role', 'status'); el.textContent = msg;
+  document.getElementById('app').appendChild(el);
+  toastTimer = setTimeout(() => { ui.toast = null; document.querySelector('.toast')?.remove(); }, 2600);
+}
+function ask(title, text, yes, fn, danger = true) { ui.confirm = { title, text, yes, danger }; confirmFn = fn; }
+function go(hash) { if (location.hash === '#' + hash) { route = parseHash(); render(); } else location.hash = hash; }
+
+/* ---------- icons ---------- */
+const svg = (d, s = 16) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const STAR = svg('<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>', 18);
+const CHECK = svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 12);
+const DOTS = svg('<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>');
+const ARCHIVE = svg('<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10h14V9M10 13h4"/>', 14);
+const PENCIL = svg('<path d="M4 20h4L19 9l-4-4L4 16z"/>', 14);
+const CLOCK = svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>', 12);
+const LINES = svg('<path d="M5 7h14M5 12h14M5 17h9"/>', 13);
+const BUBBLE = svg('<path d="M5 5h14v10H10l-5 4z"/>', 13);
+const TICKBOX = svg('<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/>', 13);
+const PLUS = svg('<path d="M12 5v14M5 12h14"/>', 16);
+const LOGO = `<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="3" width="6" height="14" rx="1.6" fill="currentColor"/><rect x="9" y="3" width="6" height="9" rx="1.6" fill="currentColor" opacity=".7"/><rect x="16" y="3" width="6" height="18" rx="1.6" fill="currentColor" opacity=".45"/></svg>`;
+
+/* ---------- routing ---------- */
+function parseHash() {
+  const h = location.hash.slice(1);
+  let m = h.match(/^board-(\w+)$/);
+  if (m) return { view: 'board', b: m[1], card: null };
+  m = h.match(/^card-(\w+)-(\d+)(?:-c(\d+))?$/);
+  if (m) return { view: 'board', b: m[1], card: +m[2], comment: m[3] ? +m[3] : null };
+  return { view: 'home' };
+}
+window.addEventListener('hashchange', () => {
+  const prevBoard = route.b;
+  route = parseHash();
+  ui.pop = null; ui.edit = null; ui.descEdit = false; ui.editComment = null; ui.addItem = null;
+  if (route.b !== prevBoard) { ui.panel = null; ui.addList = false; ui.addCard = null; ui.modal = null; }
+  if (ui.openAddList) { ui.addList = true; ui.focus = 'add-list-input'; ui.openAddList = false; }
+  if (route.view === 'board' && byId(route.b)) ui.recent = [route.b, ...ui.recent.filter((x) => x !== route.b)];
+  render();
+});
+
+/* ---------- views ---------- */
+function topbar() {
+  return `<header class="top gutter">
+    <a class="brand" href="#home">${LOGO}Taskboard</a>
+    <span class="proto">Prototype · sample data · nothing is saved</span>
+    <span class="grow"></span>
+    <button class="toggle" data-act="toggle-req" aria-pressed="${ui.showReq}">Requirement IDs</button>
+    ${avatar(ME)}
+  </header>`;
+}
+
+function tile(b) {
+  const lists = active(b.lists);
+  const counts = lists.map((l) => active(l.cards).length);
+  const total = counts.reduce((a, n) => a + n, 0), max = Math.max(1, ...counts);
+  return `<div class="tile">
+    <a class="tile-link" href="#board-${b.id}">
+      <span class="tile-name">${esc(b.title)}</span>
+      <span class="tile-meta"><span>${lists.length} lists · ${total} cards</span>
+        <span class="spark" aria-hidden="true">${counts.map((n) => `<i style="height:${6 + Math.round((n / max) * 20)}px"></i>`).join('')}</span></span>
+    </a>
+    <button class="star ${b.starred ? 'on' : ''}" data-act="star" data-b="${b.id}" aria-pressed="${b.starred}" aria-label="Star ${esc(b.title)}">${STAR}</button>
+  </div>`;
+}
+function home() {
+  const mine = state.boards.filter((b) => !b.closed && myRole(b));
+  const starred = mine.filter((b) => b.starred);
+  const recent = ui.recent.map(byId).filter((b) => b && mine.includes(b)).slice(0, 4);
+  const closed = state.boards.filter((b) => b.closed && myRole(b));
+  const sec = (title, list, req, extra = '') => `<section class="sec"><div class="sec-head"><h2>${title}</h2>${req ? R(req) : ''}</div>
+    <div class="tiles">${list.map(tile).join('')}${extra}</div></section>`;
+  return `<main class="home gutter"><div class="home-inner">
+    <div class="sec-head"><h1>Your boards</h1>${R('R-BOARD-01')}</div>
+    ${starred.length ? sec('Starred', starred, 'R-BOARD-04') : ''}
+    ${recent.length ? sec('Recently opened', recent, 'R-BOARD-01') : ''}
+    ${sec('All boards', mine, '', `<button class="tile-new" id="new-board" data-act="new-board">+ Create a board ${R('R-BOARD-02')}</button>`)}
+    <div class="row"><button class="btn" data-act="open-closed">Closed boards (${closed.length})</button>${R('R-BOARD-07')}</div>
+  </div></main>`;
+}
+
+function boardView(b) {
+  const admin = isAdmin(b), edit = canEdit(b);
+  const title = ui.edit?.k === 'board'
+    ? `<form data-form="board-title"><input id="edit-input" class="title-input" value="${esc(b.title)}" aria-label="Board title" maxlength="100"></form>`
+    : `<h1><button class="board-title" ${admin && !b.closed ? 'data-act="edit-board-title" title="Click to rename"' : 'disabled'}>${esc(b.title)}</button></h1>`;
+  const lists = active(b.lists);
+  return `<div class="boardwrap">
+    <div class="boardbar gutter">
+      <a class="ghost" href="#home">← Boards</a>
+      ${title}${R('R-BOARD-03')}
+      <button class="star ${b.starred ? 'on' : ''}" data-act="star" data-b="${b.id}" aria-pressed="${b.starred}" aria-label="Star this board">${STAR}</button>
+      <span class="grow"></span>
+      <div class="avs">${b.members.map((m) => avatar(m.u)).join('')}</div>
+      <button class="btn" data-act="open-share">Share</button>${R('R-MEMBER-02', 'R-MEMBER-03')}
+      <button class="btn" data-act="open-panel" data-p="about">Menu</button>
+    </div>
+    ${b.closed ? `<div class="banner gutter" role="status"><span>This board is closed, so it's read-only.</span>
+      ${admin ? `<button class="btn sm" data-act="reopen" data-b="${b.id}">Reopen board</button>` : '<span class="muted">Ask an admin to reopen it.</span>'}${R('R-BOARD-06')}</div>` : ''}
+    <div class="lanes gutter" id="lanes">
+      ${lists.map((l, i) => listCol(b, l, edit, i === 0)).join('')}
+      ${edit ? addListCol(lists.length === 0) : ''}
+    </div>
+  </div>`;
+}
+function addListCol(first) {
+  if (!ui.addList) return `<div class="list-add"><button class="add-list-btn" data-act="add-list-open">+ Add ${first ? 'a' : 'another'} list ${R('R-LIST-01')}</button></div>`;
+  return `<div class="list-add"><form class="mini-form" data-form="add-list">
+    <input class="field" id="add-list-input" placeholder="List name" aria-label="List name" maxlength="100" autocomplete="off">
+    <div class="row"><button class="btn primary sm">Add list</button><button type="button" class="x" data-act="add-list-cancel" aria-label="Stop adding lists">×</button>${R('R-LIST-01')}</div>
+  </form></div>`;
+}
+function listCol(b, l, edit, first) {
+  const cards = active(l.cards);
+  const name = ui.edit?.k === 'list' && ui.edit.id === l.id
+    ? `<form data-form="list-name" style="flex:1;display:flex"><input id="edit-input" class="list-input" value="${esc(l.title)}" aria-label="List name" maxlength="100"></form>`
+    : `<h2><button class="list-name" ${edit ? `data-act="edit-list" data-l="${l.id}"` : 'disabled'}>${esc(l.title)}</button></h2>`;
+  const add = !edit ? '' : ui.addCard === l.id
+    ? `<form class="mini-form" data-form="add-card" data-l="${l.id}">
+        <input class="field" id="add-card-input" placeholder="Card title" aria-label="Card title" maxlength="100" autocomplete="off">
+        <div class="row"><button class="btn primary sm">Add card</button><button type="button" class="x" data-act="add-card-cancel" aria-label="Stop adding cards">×</button></div>
+      </form>`
+    : `<button class="add-card" data-act="add-card-open" data-l="${l.id}">+ Add a card ${first ? R('R-CARD-01') : ''}</button>`;
+  const editingName = ui.edit?.k === 'list' && ui.edit.id === l.id;
+  return `<section class="list" data-list="${l.id}" aria-label="${esc(l.title)}">
+    <header class="list-head" ${edit && !editingName ? 'draggable="true"' : ''}>
+      ${name}
+      <span class="count" title="${cards.length} cards">${cards.length}</span>
+      ${edit ? `<button class="ghost sm" id="lm-${l.id}" data-act="list-menu" data-l="${l.id}" aria-label="List actions for ${esc(l.title)}">${DOTS}</button>` : ''}
+    </header>
+    ${first ? `<div class="row" style="padding:0 4px">${R('R-LIST-02', 'R-LIST-03', 'R-LIST-04')}${R('R-CARD-02', 'R-CARD-05', 'R-CARD-06')}</div>` : ''}
+    <div class="cards" data-cards="${l.id}">${cards.map((c) => cardFront(b, c, edit)).join('')}</div>
+    ${add}
+  </section>`;
+}
+function cardFront(b, c, edit) {
+  const lbls = c.labels.map((id) => b.labels.find((l) => l.id === id)).filter(Boolean).sort(labelSort);
+  const items = c.checklists.flatMap((k) => k.items);
+  const doneItems = items.filter((i) => i.done).length;
+  const badges = [
+    dueBadge(c),
+    c.desc ? `<span class="badge" title="Has a description">${LINES}</span>` : '',
+    c.comments.length ? `<span class="badge" title="${c.comments.length} comments">${BUBBLE}${c.comments.length}</span>` : '',
+    items.length ? `<span class="badge" title="Checklist items done">${TICKBOX}${doneItems}/${items.length}</span>` : '',
+    `<span class="cardno">#${c.num}</span>`,
+    c.members.length ? `<span class="avs">${c.members.map((u) => avatar(u, 'sm')).join('')}</span>` : '',
+  ].join('');
+  const tog = edit
+    ? `<button class="done-tog ${c.done ? 'on' : ''}" data-act="toggle-done" data-n="${c.num}" aria-label="${c.done ? 'Mark not done' : 'Mark done'}">${CHECK}</button>`
+    : c.done ? `<span class="done-tog on">${CHECK}</span>` : '';
+  return `<article class="card ${c.done ? 'is-done' : ''}" data-act="open-card" data-n="${c.num}" data-card="${c.num}" ${edit ? 'draggable="true"' : ''} tabindex="0" aria-label="${esc(c.title)}">
+    ${lbls.length ? `<div class="card-lbls">${lbls.map((l) => chip(l, 'mini')).join('')}</div>` : ''}
+    <div class="card-title-row">${tog}<span class="card-title">${esc(c.title)}</span></div>
+    <div class="badges">${badges}</div>
+    ${c.done && edit ? `<button class="quick-arch" data-act="quick-archive" data-n="${c.num}" aria-label="Archive this card" title="Archive">${ARCHIVE}</button>` : ''}
+  </article>`;
+}
+
+/* ---------- card dialog ---------- */
+function cardDialog(b) {
+  const f = findCard(b, route.card);
+  if (!f) return '';
+  const { card: c, list: l } = f;
+  const ro = !canEdit(b) || c.archived || l.archived;
+  const lbls = c.labels.map((id) => b.labels.find((x) => x.id === id)).filter(Boolean).sort(labelSort);
+  const title = ui.edit?.k === 'card'
+    ? `<form data-form="card-title" style="flex:1"><input id="edit-input" class="title-input" style="width:100%;font-size:24px" value="${esc(c.title)}" aria-label="Card title" maxlength="100"></form>`
+    : `<h2 style="flex:1;min-width:0"><button class="card-h-title" ${ro ? 'disabled' : 'data-act="edit-card-title"'}>${esc(c.title)}</button></h2>`;
+  const detailBtns = ro ? '' : [
+    !lbls.length ? `<button class="btn sm" id="btn-labels" data-act="pop-labels">Labels</button>` : '',
+    !c.due ? `<button class="btn sm" id="btn-dates" data-act="pop-dates">Dates</button>` : '',
+    `<button class="btn sm" id="btn-checklist" data-act="pop-checklist">Checklist</button>`,
+    !c.members.length ? `<button class="btn sm" id="btn-members" data-act="pop-members">Members</button>` : '',
+  ].join('');
+  const facts = [
+    c.members.length ? `<div class="fact"><span>Members</span><div class="row">${c.members.map((u) => avatar(u)).join('')}${ro ? '' : `<button class="addsq" id="sec-members" data-act="pop-members" aria-label="Change members">${PLUS}</button>`}</div></div>` : '',
+    lbls.length ? `<div class="fact"><span>Labels</span><div class="row">${lbls.map((x) => chip(x)).join('')}${ro ? '' : `<button class="addsq" id="sec-labels" data-act="pop-labels" aria-label="Change labels">${PLUS}</button>`}</div></div>` : '',
+    c.due ? `<div class="fact"><span>${c.start ? 'Dates' : 'Due date'}</span><div class="row">${c.start ? `<span class="due upcoming">${esc(shortDate(c.start))} →</span>` : ''}${ro ? dueBadge(c, true) : `<button class="ghost sm" id="sec-dates" data-act="pop-dates" style="padding:0">${dueBadge(c, true)}</button>`}</div></div>` : '',
+  ].join('');
+  const desc = ui.descEdit && !ro
+    ? `<form data-form="desc" class="blk">${toolbar('desc-input')}<textarea class="field" id="desc-input" rows="6" aria-label="Description">${esc(c.desc)}</textarea>
+        <div class="row"><button class="btn primary sm">Save</button><button type="button" class="btn sm" data-act="desc-cancel">Cancel</button></div></form>`
+    : c.desc
+      ? `<button class="desc-view rich" ${ro ? 'disabled' : 'data-act="desc-edit"'} title="${ro ? '' : 'Click to edit'}">${rich(c.desc)}</button>`
+      : ro ? '<p class="hint">No description.</p>' : `<button class="desc-empty" data-act="desc-edit">Add a description…</button>`;
+  return `<div class="scrim" data-act="scrim-card"><div class="dialog ${c.done ? 'is-done' : ''}" role="dialog" aria-modal="true" aria-label="${esc(c.title)}">
+    <div class="dlg-top">
+      ${ro ? `<span class="in-list">In list <b>${esc(l.title)}</b></span>` : `<button class="btn sm" id="dlg-list" data-act="pop-move">In list <b>${esc(l.title)}</b> ▾</button>`}
+      <span class="cardno">#${c.num}</span>${R('R-CARD-03', 'R-CARD-07')}
+      <span class="grow"></span>
+      ${canEdit(b) && !l.archived ? `<button class="ghost sm" id="dlg-menu" data-act="card-menu" aria-label="Card actions">${DOTS}</button>` : ''}
+      <button class="x" data-act="close-card" aria-label="Close card">×</button>
+    </div>
+    ${c.archived ? `<div class="arch-banner" role="status">${ARCHIVE}<span>This card was archived ${esc(dayWords(c.archivedAt))}.</span>${R('R-CARD-08')}</div>` : ''}
+    ${l.archived ? `<div class="arch-banner" role="status">${ARCHIVE}<span>Its list, ${esc(l.title)}, is archived. Restore the list to change this card.</span></div>` : ''}
+    <div class="dlg-body">
+      <div class="dlg-main">
+        <div class="card-h">
+          ${ro ? (c.done ? `<span class="done-tog on">${CHECK}</span>` : '') : `<button class="done-tog ${c.done ? 'on' : ''}" data-act="toggle-done" data-n="${c.num}" aria-label="${c.done ? 'Mark not done' : 'Mark done'}">${CHECK}</button>`}
+          ${title}
+        </div>
+        <div class="row">${R('R-CARD-04', 'R-CARD-05')}</div>
+        ${detailBtns ? `<div class="detail-btns">${detailBtns}${R('R-CARD-11', 'R-LABEL-02', 'R-DATE-01', 'R-CHECK-01')}</div>` : ''}
+        ${facts ? `<div class="facts">${facts}${R('R-DATE-02', 'R-DATE-03')}</div>` : ''}
+        <section class="blk"><div class="blk-head"><h3>Description</h3></div>${desc}</section>
+        ${c.checklists.map((k) => checklistBlock(b, c, k, ro)).join('')}
+      </div>
+      <aside class="dlg-side">${feed(b, c, ro)}</aside>
+    </div>
+  </div></div>`;
+}
+function toolbar(target) {
+  return `<div class="toolbar" role="toolbar" aria-label="Formatting">
+    <button type="button" data-act="fmt" data-f="b" data-t="${target}" aria-label="Bold"><b>B</b></button>
+    <button type="button" data-act="fmt" data-f="i" data-t="${target}" aria-label="Italic"><i>I</i></button>
+    <button type="button" data-act="fmt" data-f="ul" data-t="${target}" aria-label="Bulleted list">• List</button>
+  </div>`;
+}
+function checklistBlock(b, c, k, ro) {
+  const done = k.items.filter((i) => i.done).length, pct = k.items.length ? Math.round((done / k.items.length) * 100) : 0;
+  const shown = k.hideChecked ? k.items.filter((i) => !i.done) : k.items;
+  return `<section class="blk" aria-label="${esc(k.title)}">
+    <div class="blk-head"><h3 class="big">${esc(k.title)}</h3>
+      ${done ? `<button class="btn sm" data-act="hide-checked" data-k="${k.id}">${k.hideChecked ? `Show ticked items (${done})` : 'Hide ticked items'}</button>` : ''}
+      ${ro ? '' : `<button class="btn sm" data-act="del-checklist" data-k="${k.id}">Delete</button>`}
+    </div>
+    <div class="progress"><span>${pct}%</span><div class="bar"><i class="${pct === 100 ? 'full' : ''}" style="width:${pct}%"></i></div></div>
+    <div class="items">${shown.map((i) => `<div class="item ${i.done ? 'done' : ''}">
+        <input type="checkbox" id="it-${i.id}" data-act="item-toggle" data-k="${k.id}" data-i="${i.id}" ${i.done ? 'checked' : ''} ${ro ? 'disabled' : ''}>
+        <label class="t" for="it-${i.id}">${esc(i.t)}</label>
+        <span class="item-meta">${i.due ? esc(shortDate(i.due)) : ''}${i.assignee ? avatar(i.assignee, 'sm') : ''}</span>
+        ${ro ? '' : `<button class="ghost sm" id="im-${i.id}" data-act="item-meta" data-k="${k.id}" data-i="${i.id}" aria-label="Item options for ${esc(i.t)}">${DOTS}</button>`}
+      </div>`).join('')}</div>
+    ${ro ? '' : ui.addItem === k.id
+      ? `<form class="mini-form" style="background:none;padding:0" data-form="add-item" data-k="${k.id}"><input class="field" id="add-item-input" placeholder="Add an item" aria-label="New item" maxlength="200" autocomplete="off">
+          <div class="row"><button class="btn primary sm">Add</button><button type="button" class="btn sm" data-act="add-item-cancel">Done</button></div></form>`
+      : `<div><button class="btn sm" data-act="add-item-open" data-k="${k.id}">Add an item</button></div>`}
+    <div class="row">${R('R-CHECK-02', 'R-CHECK-03', 'R-CHECK-04', 'R-CHECK-05')}</div>
+  </section>`;
+}
+function feed(b, c, ro) {
+  const items = [...c.comments.map((x) => ({ ...x, kind: 'comment' })), ...(ui.showDetails ? c.activity.map((x) => ({ ...x, kind: 'event' })) : [])].sort((a, z) => z.at - a.at);
+  const composer = ro
+    ? `<p class="hint">${c.archived ? 'Restore the card to comment on it.' : 'Comments are read-only here.'}</p>`
+    : `<form data-form="comment" class="blk" style="gap:6px">${toolbar('comment-input')}
+        <textarea class="field" id="comment-input" rows="2" placeholder="Write a comment…" aria-label="Write a comment" style="min-height:60px"></textarea>
+        <div><button class="btn primary sm">Save</button></div></form>`;
+  return `<div class="blk-head"><h3>Comments and activity</h3>
+      <button class="btn sm" data-act="toggle-details" aria-pressed="${ui.showDetails}">${ui.showDetails ? 'Hide details' : 'Show details'}</button></div>
+    <div class="row">${R('R-COMMENT-01', 'R-ACTIVITY-02')}</div>
+    ${composer}
+    <div class="feed">${items.map((x) => x.kind === 'comment' ? commentRow(b, c, x, ro) : `<div class="ev">${avatar(x.u, 'sm')}<div><b>${esc(users[x.u]?.name)}</b> ${esc(x.text)}<time>${when(x.at)}</time></div></div>`).join('') || '<p class="hint">Nothing here yet.</p>'}</div>`;
+}
+function commentRow(b, c, x, ro) {
+  const mine = x.u === ME;
+  if (ui.editComment === x.id) {
+    return `<div class="ev" id="cm-${x.id}">${avatar(x.u, 'sm')}<form data-form="comment-edit" data-id="${x.id}" style="flex:1;display:grid;gap:6px">
+      <textarea class="field" id="comment-edit-input" rows="3" aria-label="Edit comment">${esc(x.text)}</textarea>
+      <div class="row"><button class="btn primary sm">Save</button><button type="button" class="btn sm" data-act="comment-cancel">Discard changes</button></div></form></div>`;
+  }
+  return `<div class="ev" id="cm-${x.id}">${avatar(x.u, 'sm')}<div>
+    <b>${esc(users[x.u]?.name)}</b> <time style="display:inline">${when(x.at)}${x.edited ? ' (edited)' : ''}</time>
+    <div class="cmt-body rich">${rich(x.text)}</div>
+    <div class="cmt-acts">
+      <button class="ghost" data-act="comment-link" data-id="${x.id}">Copy link</button>
+      ${mine && !ro ? `<button class="ghost" data-act="comment-edit" data-id="${x.id}">Edit</button><button class="ghost" data-act="comment-delete" data-id="${x.id}">Delete</button>` : ''}
+    </div>
+    ${x.id === c.comments[c.comments.length - 1]?.id ? `<div class="row">${R('R-COMMENT-02', 'R-COMMENT-03', 'R-COMMENT-04')}</div>` : ''}
+  </div></div>`;
+}
+
+/* ---------- board panel ---------- */
+function panel(b) {
+  const tab = (k, label) => `<button data-act="open-panel" data-p="${k}" aria-current="${ui.panel === k}">${label}</button>`;
+  let body = '';
+  if (ui.panel === 'about') {
+    body = ui.aboutEdit
+      ? `<form data-form="about" class="blk"><label class="lab" for="about-input">Description</label><textarea class="field" id="about-input" rows="5">${esc(b.desc)}</textarea>
+          <div class="row"><button class="btn primary sm">Save</button><button type="button" class="btn sm" data-act="about-cancel">Cancel</button></div></form>`
+      : `<div class="blk"><div class="blk-head"><h3>Description</h3>${canEdit(b) ? '<button class="btn sm" data-act="about-edit">Edit</button>' : ''}</div>
+          ${b.desc ? `<div class="rich">${rich(b.desc)}</div>` : '<p class="hint">No description yet.</p>'}</div>`;
+    const creator = b.members.find((m) => m.creator);
+    body += `<div class="blk"><div class="blk-head"><h3>Admins</h3></div><div class="row">${b.members.filter((m) => m.role === 'admin').map((m) => `${avatar(m.u)} <span>${esc(users[m.u].name)}</span>`).join(' ')}</div>
+      ${creator ? `<p class="hint">Created by ${esc(users[creator.u].name)}.</p>` : ''}</div>${R('R-BOARD-05')}`;
+  } else if (ui.panel === 'activity') {
+    const list = b.activity.filter((a) => ui.actFilter === 'all' || a.comment).slice().sort((a, z) => z.at - a.at);
+    body = `<div class="row"><div class="seg"><button data-act="act-filter" data-f="all" aria-pressed="${ui.actFilter === 'all'}">All</button><button data-act="act-filter" data-f="comments" aria-pressed="${ui.actFilter === 'comments'}">Comments</button></div>${R('R-ACTIVITY-01')}</div>
+      <div class="feed">${list.map((a) => `<div class="ev">${avatar(a.u, 'sm')}<div><b>${esc(users[a.u]?.name)}</b> ${esc(a.text)}<time>${when(a.at)}</time></div></div>`).join('') || '<div class="empty">No comments yet.</div>'}</div>`;
+  } else if (ui.panel === 'archived') {
+    const cards = b.lists.flatMap((l) => l.cards.filter((c) => c.archived).map((c) => ({ c, l })));
+    const lists = b.lists.filter((l) => l.archived);
+    const edit = canEdit(b);
+    body = `<div class="row"><div class="seg"><button data-act="arch-tab" data-t="cards" aria-pressed="${ui.archTab === 'cards'}">Cards</button><button data-act="arch-tab" data-t="lists" aria-pressed="${ui.archTab === 'lists'}">Lists</button></div>
+        <input class="field" style="flex:1;min-width:120px" placeholder="Search archived ${ui.archTab}" aria-label="Search archived items" data-filter=".arow"></div>
+      <div>${ui.archTab === 'cards'
+        ? (cards.map(({ c, l }) => `<div class="arow" data-name="${esc(c.title.toLowerCase())}"><div><a href="#card-${b.id}-${c.num}">${esc(c.title)}</a><small>in ${esc(l.title)} · archived ${when(c.archivedAt)}</small></div>
+            ${edit && !l.archived ? `<button class="btn sm" data-act="restore-card" data-n="${c.num}">Restore</button><button class="btn sm" data-act="delete-card" data-n="${c.num}">Delete</button>` : ''}</div>`).join('') || '<div class="empty">No archived cards.</div>')
+        : (lists.map((l) => `<div class="arow" data-name="${esc(l.title.toLowerCase())}"><div>${esc(l.title)}<small>${l.cards.length} cards · archived ${when(l.archivedAt)}</small></div>
+            ${edit ? `<button class="btn sm" data-act="restore-list" data-l="${l.id}">Restore</button><button class="btn sm" data-act="delete-list" data-l="${l.id}">Delete</button>` : ''}</div>`).join('') || '<div class="empty">No archived lists.</div>')}
+      </div><div class="row">${R('R-LIST-06', 'R-LIST-07', 'R-LIST-08', 'R-CARD-09', 'R-CARD-10')}</div>`;
+  } else if (ui.panel === 'labels') {
+    body = `<p class="hint">Labels belong to this board. Every new board starts with six colours and no names.</p>${R('R-LABEL-01', 'R-LABEL-04', 'R-LABEL-05')}
+      <div class="blk">${b.labels.slice().sort(labelSort).map((l) => `<div class="lbl-row">${chip(l)}<span class="grow"></span>
+        ${canEdit(b) ? `<button class="ghost sm" id="pl-${l.id}" data-act="label-edit" data-id="${l.id}" aria-label="Edit label">${PENCIL}</button>` : ''}</div>`).join('')}</div>
+      ${canEdit(b) ? `<button class="btn" id="pl-new" data-act="label-new">Create a label</button>` : ''}`;
+  }
+  const foot = isAdmin(b) && !b.closed ? `<div class="panel-foot"><button class="btn" data-act="close-board">Close board…</button>${R('R-BOARD-06')}</div>` : '';
+  return `<aside class="panel" aria-label="Board menu">
+    <div class="panel-head"><h2>Menu</h2><button class="x" data-act="close-panel" aria-label="Close menu">×</button></div>
+    <nav class="tabs">${tab('about', 'About')}${tab('activity', 'Activity')}${tab('archived', 'Archived items')}${tab('labels', 'Labels')}</nav>
+    <div class="panel-body">${body}</div>${foot}
+  </aside>`;
+}
+
+/* ---------- modals ---------- */
+function modal(b) {
+  if (ui.modal === 'new-board') {
+    return `<div class="scrim modal-z" data-act="scrim-modal"><form class="modal" data-form="new-board" role="dialog" aria-modal="true" aria-label="Create a board">
+      <div class="modal-head"><h2>Create a board</h2>${R('R-BOARD-02', 'R-MEMBER-01', 'R-LABEL-01')}<button type="button" class="x" data-act="close-modal" aria-label="Close">×</button></div>
+      <label class="lab" for="nb-title">Board title</label>
+      <input class="field" id="nb-title" maxlength="100" autocomplete="off" aria-describedby="nb-hint">
+      <p class="hint" id="nb-hint">A title is required.</p>
+      <p class="hint">You'll be the board's admin. It starts with six colour labels.</p>
+      <div class="row"><button class="btn primary" id="nb-create" disabled>Create</button></div>
+    </form></div>`;
+  }
+  if (ui.modal === 'closed') {
+    const closed = state.boards.filter((x) => x.closed && myRole(x)).sort((a, z) => z.closedAt - a.closedAt);
+    return `<div class="scrim modal-z" data-act="scrim-modal"><div class="modal" role="dialog" aria-modal="true" aria-label="Closed boards">
+      <div class="modal-head"><h2>Closed boards</h2>${R('R-BOARD-07', 'R-BOARD-08')}<button class="x" data-act="close-modal" aria-label="Close">×</button></div>
+      <div>${closed.map((x) => `<div class="arow"><div><a href="#board-${x.id}">${esc(x.title)}</a><small>closed ${when(x.closedAt)}</small></div>
+        ${isAdmin(x) ? `<button class="btn sm" data-act="reopen" data-b="${x.id}">Reopen</button><button class="btn sm" data-act="delete-board" data-b="${x.id}">Delete</button>` : '<small class="muted">Only admins can reopen</small>'}</div>`).join('') || '<div class="empty">No boards have been closed.</div>'}</div>
+    </div></div>`;
+  }
+  if (ui.modal === 'share' && b) {
+    const admin = isAdmin(b), admins = adminCount(b);
+    const rows = b.members.slice().sort((a, z) => (z.role === 'admin') - (a.role === 'admin')).map((m) => {
+      const last = m.role === 'admin' && admins === 1;
+      const canChange = admin && !b.closed && !last;
+      return `<div class="member">${avatar(m.u)}<div>${esc(users[m.u].name)}${m.u === ME ? ' (you)' : ''} ${m.creator ? '<span class="tag">Creator</span>' : ''}
+          ${last ? '<small>A board needs at least one admin.</small>' : ''}</div>
+        <select data-role-u="${m.u}" aria-label="Role for ${esc(users[m.u].name)}" ${canChange ? '' : 'disabled'}>
+          <option value="admin" ${m.role === 'admin' ? 'selected' : ''}>Admin</option><option value="member" ${m.role === 'member' ? 'selected' : ''}>Member</option></select>
+        ${m.u === ME ? `<button class="btn sm" data-act="leave-board" ${last ? 'disabled title="A board needs at least one admin."' : ''}>Leave</button>` : ''}
+      </div>`;
+    }).join('');
+    return `<div class="scrim modal-z" data-act="scrim-modal"><div class="modal" role="dialog" aria-modal="true" aria-label="Share board">
+      <div class="modal-head"><h2>Share board</h2><button class="x" data-act="close-modal" aria-label="Close">×</button></div>
+      ${admin && !b.closed ? `<form class="invite" data-form="invite"><input class="field" id="invite-input" placeholder="Email address or name" aria-label="Email address or name" autocomplete="off">
+          <select id="invite-role" aria-label="Role"><option value="member">Member</option><option value="admin">Admin</option></select><button class="btn primary">Invite</button></form>
+          <p class="err" id="invite-err" hidden>Type an email address or a name to invite.</p>${R('R-MEMBER-02')}`
+        : `<p class="hint">Only admins can invite people or change roles.</p>`}
+      <div class="blk"><div class="blk-head"><h3>Board members · ${b.members.length}</h3>${R('R-MEMBER-03', 'R-MEMBER-04', 'R-MEMBER-05', 'R-MEMBER-06')}</div>${rows}</div>
+    </div></div>`;
+  }
+  return '';
+}
+function confirmBox() {
+  const c = ui.confirm;
+  return `<div class="scrim confirm-z"><div class="modal" role="alertdialog" aria-modal="true" aria-label="${esc(c.title)}">
+    <h2>${esc(c.title)}</h2><p style="margin:0">${esc(c.text)}</p>
+    <div class="row"><button class="btn ${c.danger ? 'danger' : 'primary'}" id="confirm-yes" data-act="confirm-yes">${esc(c.yes)}</button><button class="btn" data-act="confirm-no">Cancel</button></div>
+  </div></div>`;
+}
+
+/* ---------- popovers ---------- */
+function popContent(b) {
+  const p = ui.pop, head = (t, back) => `<div class="pop-head">${back ? `<button class="x" data-act="${back}" aria-label="Back">‹</button>` : ''}<h3>${t}</h3><button class="x" data-act="close-pop" aria-label="Close">×</button></div>`;
+  const f = b && route.card != null ? findCard(b, route.card) : null;
+  const c = f?.card;
+  switch (p.type) {
+    case 'list-menu': {
+      const l = b.lists.find((x) => x.id === p.l), n = active(l.cards).length;
+      if (p.mode === 'move') {
+        const lists = active(b.lists), cur = lists.indexOf(l);
+        return `${head('Move list', 'lm-back')}<form data-form="move-list" class="blk"><label class="lab" for="ml-pos">Position</label>
+          <select class="field" id="ml-pos">${lists.map((_, i) => `<option value="${i}" ${i === cur ? 'selected' : ''}>${i + 1}${i === cur ? ' (current)' : ''}</option>`).join('')}</select>
+          <button class="btn primary">Move</button>${R('R-LIST-03')}</form>`;
+      }
+      if (p.mode === 'sort') {
+        return `${head('Sort cards once', 'lm-back')}<div class="menu">
+          <button data-act="sort-do" data-s="new">Date created, newest first</button><button data-act="sort-do" data-s="old">Date created, oldest first</button><button data-act="sort-do" data-s="name">Card title, A to Z</button></div>
+          <p class="hint">Cards added later still go at the bottom.</p>${R('R-LIST-05')}`;
+      }
+      return `${head(esc(l.title))}<div class="menu">
+        <button data-act="lm-add-card">Add a card</button>
+        <button data-act="lm-move">Move list…</button>
+        ${n ? '<button data-act="lm-sort">Sort cards…</button>' : ''}
+        <hr><button data-act="lm-archive">Archive this list…</button></div>${R('R-LIST-03', 'R-LIST-05', 'R-LIST-06')}`;
+    }
+    case 'card-menu':
+      return `${head('Card actions')}<div class="menu">${c.archived
+        ? `<button data-act="restore-card" data-n="${c.num}">Restore to the board</button><button class="danger-text" data-act="delete-card" data-n="${c.num}">Delete for good…</button>`
+        : `<button data-act="cm-move">Move…</button><button data-act="cm-archive">Archive</button>`}</div>${R('R-CARD-07', 'R-CARD-08', 'R-CARD-09', 'R-CARD-10')}`;
+    case 'move': {
+      const lists = active(b.lists);
+      return `${head('Move card')}<form data-form="move-card" class="blk">
+        <label class="lab" for="mv-list">List</label><select class="field" id="mv-list">${lists.map((l) => `<option value="${l.id}" ${l === f.list ? 'selected' : ''}>${esc(l.title)}${l === f.list ? ' (current)' : ''}</option>`).join('')}</select>
+        <label class="lab" for="mv-pos">Position</label><select class="field" id="mv-pos">${posOptions(b, c, f.list.id)}</select>
+        <button class="btn primary">Move</button>${R('R-CARD-07')}</form>`;
+    }
+    case 'labels': {
+      return `${head('Labels')}<input class="field" placeholder="Search labels" aria-label="Search labels" data-filter=".lbl-row" id="lbl-search">
+        <div class="blk" style="gap:6px">${b.labels.slice().sort(labelSort).map((l) => `<div class="lbl-row" data-name="${esc(`${l.name} ${l.color || 'no colour'}`.toLowerCase())}">
+          <label class="lbl-check"><input type="checkbox" data-act="label-toggle" data-id="${l.id}" ${c.labels.includes(l.id) ? 'checked' : ''}> ${chip(l)}</label>
+          <button class="ghost sm" id="le-${l.id}" data-act="label-edit" data-id="${l.id}" aria-label="Edit label ${esc(l.name || l.color)}">${PENCIL}</button></div>`).join('')}</div>
+        <button class="btn wide" id="lbl-new" data-act="label-new">Create a label</button>${R('R-LABEL-02', 'R-LABEL-03')}`;
+    }
+    case 'label-edit': {
+      const l = p.id ? b.labels.find((x) => x.id === p.id) : { name: '', color: 'green' };
+      return `${head(p.id ? 'Edit label' : 'Create a label', p.back ? 'label-back' : '')}<form data-form="label" class="blk">
+        <div style="display:grid;place-items:center;padding:8px;background:var(--bg);border-radius:8px" id="lbl-preview">${chip(l, 'lg')}</div>
+        <label class="lab" for="lbl-name">Name (optional)</label><input class="field" id="lbl-name" value="${esc(l.name)}" maxlength="50" autocomplete="off">
+        <fieldset class="palette"><legend>Colour</legend>${PALETTE.map((col) => `<label class="swatch" title="${col}"><input type="radio" name="lbl-color" value="${col}" ${l.color === col ? 'checked' : ''} aria-label="${col}"><span style="--c: var(--l-${col})"></span></label>`).join('')}
+          <label class="swatch" title="No colour"><input type="radio" name="lbl-color" value="" ${!l.color ? 'checked' : ''} aria-label="No colour"><span class="none">none</span></label></fieldset>
+        <p class="err" id="lbl-err" hidden>Give the label a name or a colour.</p>
+        <div class="row"><button class="btn primary">${p.id ? 'Save' : 'Create'}</button>${p.id ? `<span class="grow"></span><button type="button" class="btn danger" data-act="label-delete" data-id="${p.id}">Delete</button>` : ''}</div>
+        ${R('R-LABEL-03', 'R-LABEL-04', 'R-LABEL-05')}</form>`;
+    }
+    case 'dates': {
+      const due = new Date(c.due ?? Date.now() + DAY);
+      const start = new Date(c.start ?? Date.now());
+      return `${head('Dates')}<form data-form="dates" class="blk">
+        <label class="lab" for="due-date">Due date</label><div class="row" style="flex-wrap:nowrap"><input class="field" type="date" id="due-date" value="${ymd(due)}" required><input class="field" type="time" id="due-time" value="${hm(due)}" required style="max-width:120px"></div>
+        <label class="row" style="font-size:13px;font-weight:600;color:var(--muted)"><input type="checkbox" id="start-on" ${c.start ? 'checked' : ''}> Start date</label>
+        <input class="field" type="date" id="start-date" value="${ymd(start)}" ${c.start ? '' : 'disabled'} aria-label="Start date">
+        <p class="err" id="dates-err" hidden>The start date must be on or before the due date.</p>
+        <div class="row"><button class="btn primary">Save</button>${c.due ? '<button type="button" class="btn" data-act="dates-remove">Remove</button>' : ''}</div>
+        ${R('R-DATE-01', 'R-DATE-03')}</form>`;
+    }
+    case 'checklist':
+      return `${head('Add a checklist')}<form data-form="checklist" class="blk"><label class="lab" for="cl-title">Title</label>
+        <input class="field" id="cl-title" value="Checklist" maxlength="100" autocomplete="off"><button class="btn primary">Add</button>${R('R-CHECK-01')}</form>`;
+    case 'members':
+      return `${head('Members')}<input class="field" placeholder="Search board members" aria-label="Search board members" data-filter=".mrow" id="mem-search">
+        <div class="blk" style="gap:2px"><p class="hint">Board members</p>${b.members.map((m) => `<label class="mrow" data-name="${esc(users[m.u].name.toLowerCase())}">
+          <input type="checkbox" data-act="member-toggle" data-u="${m.u}" ${c.members.includes(m.u) ? 'checked' : ''}>${avatar(m.u, 'sm')} ${esc(users[m.u].name)}</label>`).join('')}</div>${R('R-CARD-11')}`;
+    case 'item': {
+      const k = c.checklists.find((x) => x.id === p.k), it = k.items.find((x) => x.id === p.i);
+      return `${head('Item')}<form data-form="item-meta" class="blk">
+        <label class="lab" for="im-assignee">Assigned to</label><select class="field" id="im-assignee"><option value="">Nobody</option>${b.members.map((m) => `<option value="${m.u}" ${it.assignee === m.u ? 'selected' : ''}>${esc(users[m.u].name)}</option>`).join('')}</select>
+        <label class="lab" for="im-due">Due date</label><input class="field" type="date" id="im-due" value="${it.due ? ymd(new Date(it.due)) : ''}">
+        <div class="row"><button class="btn primary">Save</button><span class="grow"></span><button type="button" class="btn" data-act="item-delete">Delete item</button></div>${R('R-CHECK-05')}</form>`;
+    }
+  }
+  return '';
+}
+function posOptions(b, c, listId) {
+  const l = b.lists.find((x) => x.id === listId);
+  const others = active(l.cards).filter((x) => x !== c);
+  const same = l.cards.includes(c);
+  const cur = same ? active(l.cards).indexOf(c) : others.length;
+  return Array.from({ length: others.length + 1 }, (_, i) => `<option value="${i}" ${i === cur ? 'selected' : ''}>${i + 1}${same && i === cur ? ' (current)' : ''}</option>`).join('');
+}
+
+/* ---------- render ---------- */
+function render() {
+  const lanes = document.getElementById('lanes');
+  const keep = { lanes: lanes?.scrollLeft || 0, scrim: document.querySelector('.scrim:not(.modal-z):not(.confirm-z)')?.scrollTop || 0, panel: document.querySelector('.panel-body')?.scrollTop || 0, cards: {} };
+  document.querySelectorAll('[data-cards]').forEach((el) => { keep.cards[el.dataset.cards] = el.scrollTop; });
+  document.body.classList.toggle('show-req', ui.showReq);
+  let b = B();
+  if (route.view === 'board' && !b) { route = { view: 'home' }; b = null; }
+  if (b && route.card != null && !findCard(b, route.card)) route.card = null;
+  let html = topbar() + (b ? boardView(b) : home());
+  if (b && ui.panel) html += panel(b);
+  if (b && route.card != null) html += cardDialog(b);
+  if (ui.modal) html += modal(b);
+  if (ui.pop) html += `<div class="pop" id="pop" role="dialog" aria-label="Options">${popContent(b)}</div>`;
+  if (ui.confirm) html += confirmBox();
+  if (ui.toast) html += `<div class="toast" role="status">${esc(ui.toast)}</div>`;
+  document.getElementById('app').innerHTML = html;
+  document.title = b ? `${b.title} · Taskboard Prototype` : 'Taskboard Prototype';
+  const nl = document.getElementById('lanes'); if (nl) nl.scrollLeft = keep.lanes;
+  const sc = document.querySelector('.scrim:not(.modal-z):not(.confirm-z)'); if (sc) sc.scrollTop = keep.scrim;
+  const pb = document.querySelector('.panel-body'); if (pb) pb.scrollTop = keep.panel;
+  document.querySelectorAll('[data-cards]').forEach((el) => { el.scrollTop = keep.cards[el.dataset.cards] || 0; });
+  placePop();
+  if (ui.confirm) document.getElementById('confirm-yes')?.focus();
+  else if (ui.focus) { const el = document.getElementById(ui.focus); if (el) { el.focus(); if (ui.select && el.select) el.select(); } }
+  else if (ui.pop && ui.pop !== lastPop) document.querySelector('#pop input:not([type=checkbox]):not([type=radio]), #pop select')?.focus({ preventScroll: true });
+  lastPop = ui.pop; ui.focus = null; ui.select = false;
+  if (route.comment) {
+    const el = document.getElementById('cm-' + route.comment);
+    if (el) { el.classList.add('hl'); el.scrollIntoView({ block: 'center' }); }
+    route.comment = null;
+  }
+}
+function placePop() {
+  const p = document.getElementById('pop');
+  if (!p) return;
+  const a = ui.pop.anchor && document.getElementById(ui.pop.anchor);
+  const w = p.offsetWidth, h = p.offsetHeight;
+  let left = (innerWidth - w) / 2, top = 60;
+  if (a) {
+    const r = a.getBoundingClientRect();
+    left = r.left; top = r.bottom + 6;
+    if (top + h > innerHeight - 8) top = Math.max(8, r.top - h - 6);
+  }
+  p.style.left = Math.max(8, Math.min(left, innerWidth - w - 8)) + 'px';
+  p.style.top = Math.max(8, Math.min(top, innerHeight - h - 8)) + 'px';
+}
+let lastPop = null;
+function openPop(type, anchorId, extra = {}) {
+  if (ui.pop && ui.pop.type === type && ui.pop.anchor === anchorId && !extra.mode) { ui.pop = null; return; }
+  ui.pop = { type, anchor: anchorId, ...extra };
+}
+
+/* ---------- actions on data ---------- */
+function moveCard(b, c, toId, index) {
+  const from = b.lists.find((l) => l.cards.includes(c)), to = b.lists.find((l) => l.id === toId);
+  from.cards.splice(from.cards.indexOf(c), 1);
+  const ref = active(to.cards)[index];
+  if (ref) to.cards.splice(to.cards.indexOf(ref), 0, c); else to.cards.push(c);
+  if (from !== to) {
+    logCard(c, `moved this card from ${from.title} to ${to.title}`);
+    logBoard(b, `moved “${c.title}” from ${from.title} to ${to.title}`, { card: c.num });
+  }
+}
+function moveList(b, id, index) {
+  const l = b.lists.find((x) => x.id === id);
+  b.lists.splice(b.lists.indexOf(l), 1);
+  const ref = active(b.lists)[index];
+  if (ref) b.lists.splice(b.lists.indexOf(ref), 0, l); else b.lists.push(l);
+}
+function setDone(b, c, done) {
+  c.done = done;
+  logCard(c, done ? 'marked this card as complete' : 'marked this card as not complete');
+  logBoard(b, `marked “${c.title}” as ${done ? 'complete' : 'not complete'}`, { card: c.num });
+}
+function archiveCard(b, c) {
+  c.archived = true; c.archivedAt = Date.now();
+  logCard(c, 'archived this card');
+  logBoard(b, `archived “${c.title}”`, { card: c.num });
+  toast(`Archived “${c.title}”`);
+}
+function newBoard(title) {
+  const b = {
+    id: uid('b'), title, desc: '', starred: false, closed: false, closedAt: null, cardSeq: 0, nextComment: 1,
+    members: [{ u: ME, role: 'admin', creator: true }], labels: DEFAULT_COLORS.map((c) => ({ id: uid('l'), name: '', color: c })),
+    lists: [], activity: [{ u: ME, text: 'created this board', at: Date.now() }],
+  };
+  state.boards.push(b);
+  return b;
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-act]');
+  if (!t) {
+    if (ui.pop && !e.target.closest('.pop')) { ui.pop = null; render(); }
+    return;
+  }
+  const act = t.dataset.act;
+  if (act === 'scrim-card' || act === 'scrim-modal') {
+    if (e.target !== t) { if (ui.pop) { ui.pop = null; render(); } return; }
+    if (ui.pop) { ui.pop = null; render(); return; }
+    if (act === 'scrim-card') go('board-' + route.b); else { ui.modal = null; render(); }
+    return;
+  }
+  if (!t.closest('.pop') && !['list-menu', 'card-menu', 'pop-labels', 'pop-dates', 'pop-checklist', 'pop-members', 'pop-move', 'item-meta', 'label-edit', 'label-new'].includes(act)) ui.pop = null;
+  const b = B();
+  const f = b && route.card != null ? findCard(b, route.card) : null;
+  const c = f?.card;
+  const num = t.dataset.n ? +t.dataset.n : null;
+  switch (act) {
+    case 'toggle-req': ui.showReq = !ui.showReq; try { localStorage.setItem('taskboard-proto-req', ui.showReq ? '1' : '0'); } catch (err) { /* ignore */ } break;
+    case 'star': { const x = byId(t.dataset.b); x.starred = !x.starred; toast(x.starred ? `Starred “${x.title}”` : `Unstarred “${x.title}”`); break; }
+    case 'new-board': ui.modal = 'new-board'; ui.focus = 'nb-title'; break;
+    case 'open-closed': ui.modal = 'closed'; break;
+    case 'close-modal': ui.modal = null; break;
+    case 'reopen': { const x = byId(t.dataset.b); x.closed = false; x.closedAt = null; x.activity.push({ u: ME, text: 'reopened this board', at: Date.now() }); ui.modal = null; toast(`Reopened “${x.title}”`); go('board-' + x.id); return; }
+    case 'delete-board': {
+      const x = byId(t.dataset.b);
+      ask(`Delete “${x.title}” for good?`, 'Its lists, cards, comments and history are deleted too. This can’t be undone.', 'Delete board', () => {
+        state.boards.splice(state.boards.indexOf(x), 1); ui.recent = ui.recent.filter((id) => id !== x.id); toast(`Deleted “${x.title}”`);
+      });
+      break;
+    }
+    case 'edit-board-title': ui.edit = { k: 'board' }; ui.focus = 'edit-input'; ui.select = true; break;
+    case 'open-share': ui.modal = 'share'; ui.focus = 'invite-input'; break;
+    case 'open-panel': ui.panel = t.dataset.p; ui.aboutEdit = false; break;
+    case 'close-panel': ui.panel = null; break;
+    case 'close-board':
+      ask(`Close “${b.title}”?`, 'The board becomes read-only and leaves your board list. You can reopen it later from Closed boards on the home screen.', 'Close board', () => {
+        b.closed = true; b.closedAt = Date.now(); logBoard(b, 'closed this board'); ui.panel = null; ui.addList = false; ui.addCard = null; toast(`Closed “${b.title}”`);
+      }, false);
+      break;
+    case 'about-edit': ui.aboutEdit = true; ui.focus = 'about-input'; break;
+    case 'about-cancel': ui.aboutEdit = false; break;
+    case 'act-filter': ui.actFilter = t.dataset.f; break;
+    case 'arch-tab': ui.archTab = t.dataset.t; break;
+    case 'add-list-open': ui.addList = true; ui.focus = 'add-list-input'; break;
+    case 'add-list-cancel': ui.addList = false; break;
+    case 'edit-list': ui.edit = { k: 'list', id: t.dataset.l }; ui.focus = 'edit-input'; ui.select = true; break;
+    case 'list-menu': openPop('list-menu', t.id, { l: t.dataset.l, mode: null }); if (ui.pop) ui.pop.mode = 'menu'; break;
+    case 'lm-back': ui.pop.mode = 'menu'; break;
+    case 'lm-move': ui.pop.mode = 'move'; break;
+    case 'lm-sort': ui.pop.mode = 'sort'; break;
+    case 'lm-add-card': ui.addCard = ui.pop.l; ui.focus = 'add-card-input'; ui.pop = null; break;
+    case 'lm-archive': {
+      const l = b.lists.find((x) => x.id === ui.pop.l); ui.pop = null;
+      ask(`Archive “${l.title}”?`, `The list and its ${active(l.cards).length} cards leave the board. You can restore it from Menu › Archived items.`, 'Archive list', () => {
+        l.archived = true; l.archivedAt = Date.now(); logBoard(b, `archived the list ${l.title}`); toast(`Archived “${l.title}”`);
+      }, false);
+      break;
+    }
+    case 'sort-do': {
+      const l = b.lists.find((x) => x.id === ui.pop.l), s = t.dataset.s;
+      const cmp = { new: (a, z) => z.created - a.created, old: (a, z) => a.created - z.created, name: (a, z) => a.title.localeCompare(z.title) }[s];
+      l.cards = [...active(l.cards).sort(cmp), ...l.cards.filter((x) => x.archived)];
+      ui.pop = null; toast(`Sorted “${l.title}”`);
+      break;
+    }
+    case 'add-card-open': ui.addCard = t.dataset.l; ui.focus = 'add-card-input'; break;
+    case 'add-card-cancel': ui.addCard = null; break;
+    case 'toggle-done': { const x = findCard(b, num).card; setDone(b, x, !x.done); break; }
+    case 'quick-archive': archiveCard(b, findCard(b, num).card); break;
+    case 'open-card': go(`card-${b.id}-${num}`); return;
+    case 'close-card': go('board-' + b.id); return;
+    case 'card-menu': openPop('card-menu', t.id); break;
+    case 'pop-move': openPop('move', t.id); break;
+    case 'cm-move': ui.pop = { type: 'move', anchor: 'dlg-menu' }; break;
+    case 'cm-archive': archiveCard(b, c); ui.pop = null; break;
+    case 'restore-card': {
+      const x = findCard(b, num).card; x.archived = false; x.archivedAt = null; ui.pop = null;
+      logCard(x, 'sent this card back to the board'); logBoard(b, `sent “${x.title}” back to the board`, { card: x.num }); toast(`Restored “${x.title}”`);
+      break;
+    }
+    case 'delete-card': {
+      const fx = findCard(b, num); ui.pop = null;
+      ask(`Delete “${fx.card.title}” for good?`, 'The card, its comments and its history are deleted. This can’t be undone.', 'Delete card', () => {
+        fx.list.cards.splice(fx.list.cards.indexOf(fx.card), 1);
+        b.activity = b.activity.filter((a) => a.card !== fx.card.num);
+        toast(`Deleted “${fx.card.title}”`);
+        if (route.card === fx.card.num) go('board-' + b.id);
+      });
+      break;
+    }
+    case 'restore-list': { const l = b.lists.find((x) => x.id === t.dataset.l); l.archived = false; l.archivedAt = null; logBoard(b, `restored the list ${l.title}`); toast(`Restored “${l.title}” to its place`); break; }
+    case 'delete-list': {
+      const l = b.lists.find((x) => x.id === t.dataset.l);
+      ask(`Delete “${l.title}” for good?`, `The list and its ${l.cards.length} cards are deleted. This can’t be undone.`, 'Delete list', () => {
+        b.lists.splice(b.lists.indexOf(l), 1); const nums = l.cards.map((x) => x.num); b.activity = b.activity.filter((a) => !nums.includes(a.card));
+        logBoard(b, `deleted the list ${l.title}`); toast(`Deleted “${l.title}”`);
+      });
+      break;
+    }
+    case 'edit-card-title': ui.edit = { k: 'card' }; ui.focus = 'edit-input'; ui.select = true; break;
+    case 'desc-edit': ui.descEdit = true; ui.focus = 'desc-input'; break;
+    case 'desc-cancel': ui.descEdit = false; break;
+    case 'fmt': fmt(t.dataset.t, t.dataset.f); return;
+    case 'pop-labels': openPop('labels', t.id); break;
+    case 'pop-dates': openPop('dates', t.id); break;
+    case 'pop-checklist': openPop('checklist', t.id); ui.focus = 'cl-title'; ui.select = true; break;
+    case 'pop-members': openPop('members', t.id); break;
+    case 'label-toggle': {
+      const id = t.dataset.id, on = c.labels.includes(id);
+      c.labels = on ? c.labels.filter((x) => x !== id) : [...c.labels, id];
+      break;
+    }
+    case 'label-new': ui.pop = { type: 'label-edit', id: null, anchor: ui.pop?.type === 'labels' ? ui.pop.anchor : t.id, back: ui.pop?.type === 'labels' ? ui.pop.anchor : null, fromCard: ui.pop?.type === 'labels' }; ui.focus = 'lbl-name'; break;
+    case 'label-edit': ui.pop = { type: 'label-edit', id: t.dataset.id, anchor: ui.pop?.type === 'labels' ? ui.pop.anchor : t.id, back: ui.pop?.type === 'labels' ? ui.pop.anchor : null }; break;
+    case 'label-back': ui.pop = { type: 'labels', anchor: ui.pop.back }; break;
+    case 'label-delete': {
+      const l = b.lists && b.labels.find((x) => x.id === t.dataset.id), back = ui.pop.back; ui.pop = null;
+      const used = b.lists.flatMap((x) => x.cards).filter((x) => x.labels.includes(l.id)).length;
+      ask('Delete this label?', `It's removed from all ${used} cards that have it. This can't be undone.`, 'Delete label', () => {
+        b.labels = b.labels.filter((x) => x !== l); b.lists.forEach((x) => x.cards.forEach((y) => { y.labels = y.labels.filter((id) => id !== l.id); }));
+        toast('Label deleted'); if (back) ui.pop = { type: 'labels', anchor: back };
+      });
+      break;
+    }
+    case 'dates-remove': c.due = null; c.start = null; logCard(c, 'removed the due date'); ui.pop = null; break;
+    case 'member-toggle': {
+      const u = t.dataset.u, on = c.members.includes(u);
+      c.members = on ? c.members.filter((x) => x !== u) : [...c.members, u];
+      const name = users[u].name;
+      logCard(c, u === ME ? (on ? 'left this card' : 'joined this card') : (on ? `removed ${name} from this card` : `added ${name} to this card`));
+      break;
+    }
+    case 'item-toggle': {
+      const k = c.checklists.find((x) => x.id === t.dataset.k), it = k.items.find((x) => x.id === t.dataset.i);
+      it.done = !it.done; logCard(c, it.done ? `completed ${it.t} on this card` : `marked ${it.t} not complete on this card`);
+      break;
+    }
+    case 'hide-checked': { const k = c.checklists.find((x) => x.id === t.dataset.k); k.hideChecked = !k.hideChecked; break; }
+    case 'del-checklist': {
+      const k = c.checklists.find((x) => x.id === t.dataset.k);
+      ask(`Delete the checklist “${k.title}”?`, `Its ${k.items.length} items are deleted too.`, 'Delete checklist', () => { c.checklists = c.checklists.filter((x) => x !== k); logCard(c, `removed ${k.title} from this card`); });
+      break;
+    }
+    case 'add-item-open': ui.addItem = t.dataset.k; ui.focus = 'add-item-input'; break;
+    case 'add-item-cancel': ui.addItem = null; break;
+    case 'item-meta': openPop('item', t.id, { k: t.dataset.k, i: t.dataset.i }); break;
+    case 'item-delete': { const k = c.checklists.find((x) => x.id === ui.pop.k); k.items = k.items.filter((x) => x.id !== ui.pop.i); ui.pop = null; break; }
+    case 'toggle-details': ui.showDetails = !ui.showDetails; break;
+    case 'comment-edit': ui.editComment = +t.dataset.id; ui.focus = 'comment-edit-input'; break;
+    case 'comment-cancel': ui.editComment = null; break;
+    case 'comment-delete': {
+      const id = +t.dataset.id;
+      ask('Delete this comment?', 'Deleting a comment is permanent. This can’t be undone.', 'Delete comment', () => { c.comments = c.comments.filter((x) => x.id !== id); toast('Comment deleted'); });
+      break;
+    }
+    case 'comment-link': {
+      const url = `${location.href.split('#')[0]}#card-${b.id}-${c.num}-c${t.dataset.id}`;
+      const fail = () => toast(`Link: ${url}`);
+      try { navigator.clipboard.writeText(url).then(() => toast('Link to the comment copied'), fail); } catch (err) { fail(); }
+      return;
+    }
+    case 'leave-board':
+      ask(`Leave “${b.title}”?`, 'You lose access to the board and are removed from its cards.', 'Leave board', () => {
+        b.members = b.members.filter((m) => m.u !== ME); b.lists.forEach((l) => l.cards.forEach((x) => { x.members = x.members.filter((u) => u !== ME); }));
+        logBoard(b, 'left this board'); ui.modal = null; toast(`You left “${b.title}”`); go('home');
+      });
+      break;
+    case 'confirm-yes': { const fn = confirmFn; ui.confirm = null; confirmFn = null; fn?.(); break; }
+    case 'confirm-no': ui.confirm = null; confirmFn = null; break;
+    case 'close-pop': ui.pop = null; break;
+    default: return;
+  }
+  render();
+});
+
+function fmt(target, kind) {
+  const ta = document.getElementById(target);
+  if (!ta) return;
+  const s = ta.selectionStart, e = ta.selectionEnd, sel = ta.value.slice(s, e);
+  const rep = kind === 'b' ? `**${sel || 'bold text'}**` : kind === 'i' ? `_${sel || 'italic text'}_` : (sel || 'item').split('\n').map((x) => `- ${x.replace(/^- /, '')}`).join('\n');
+  ta.setRangeText(rep, s, e, 'select');
+  ta.focus();
+}
+
+document.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const form = e.target, kind = form.dataset.form, b = B();
+  const val = (id) => document.getElementById(id)?.value ?? '';
+  const f = b && route.card != null ? findCard(b, route.card) : null;
+  const c = f?.card;
+  switch (kind) {
+    case 'new-board': {
+      const title = val('nb-title').trim();
+      if (!title) return;
+      const nb = newBoard(title); ui.modal = null; ui.openAddList = true;
+      go('board-' + nb.id); return;
+    }
+    case 'board-title': saveBoardTitle(); break;
+    case 'list-name': saveListName(); break;
+    case 'card-title': saveCardTitle(); break;
+    case 'add-list': {
+      const name = val('add-list-input').trim();
+      if (name) { b.lists.push({ id: uid('L'), title: name, archived: false, archivedAt: null, cards: [] }); logBoard(b, `added the list ${name}`); }
+      ui.focus = 'add-list-input';
+      requestAnimationFrame(() => { const l = document.getElementById('lanes'); if (l) l.scrollLeft = l.scrollWidth; });
+      break;
+    }
+    case 'add-card': {
+      const title = val('add-card-input').trim(), l = b.lists.find((x) => x.id === form.dataset.l);
+      if (!title) { ui.addCard = null; break; }
+      const nc = makeCard(b, title, l.title); l.cards.push(nc); logBoard(b, `added “${title}” to ${l.title}`, { card: nc.num });
+      ui.focus = 'add-card-input';
+      requestAnimationFrame(() => { const el = document.querySelector(`[data-cards="${l.id}"]`); if (el) el.scrollTop = el.scrollHeight; });
+      break;
+    }
+    case 'desc': c.desc = val('desc-input').trim(); ui.descEdit = false; logCard(c, 'updated the description'); break;
+    case 'about': b.desc = val('about-input').trim(); ui.aboutEdit = false; logBoard(b, 'changed the board description'); break;
+    case 'comment': {
+      const text = val('comment-input').trim();
+      if (!text) { ui.focus = 'comment-input'; break; }
+      c.comments.push({ id: b.nextComment++, u: ME, text, at: Date.now() });
+      logBoard(b, `commented on “${c.title}”`, { comment: true, card: c.num });
+      break;
+    }
+    case 'comment-edit': {
+      const x = c.comments.find((y) => y.id === +form.dataset.id), text = val('comment-edit-input').trim();
+      if (text && text !== x.text) { x.text = text; x.edited = true; }
+      ui.editComment = null; break;
+    }
+    case 'move-card': moveCard(b, c, val('mv-list'), +val('mv-pos')); ui.pop = null; toast('Card moved'); break;
+    case 'move-list': moveList(b, ui.pop.l, +val('ml-pos')); ui.pop = null; break;
+    case 'label': {
+      const name = val('lbl-name').trim(), color = form.querySelector('input[name=lbl-color]:checked')?.value || null;
+      if (!name && !color) { document.getElementById('lbl-err').hidden = false; return; }
+      const p = ui.pop;
+      if (p.id) { const l = b.labels.find((x) => x.id === p.id); l.name = name; l.color = color; }
+      else { const l = { id: uid('l'), name, color }; b.labels.push(l); if (p.fromCard && c) c.labels.push(l.id); }
+      ui.pop = p.back ? { type: 'labels', anchor: p.back } : null;
+      break;
+    }
+    case 'dates': {
+      const due = new Date(`${val('due-date')}T${val('due-time') || '12:00'}`).getTime();
+      if (Number.isNaN(due)) return;
+      const startOn = document.getElementById('start-on').checked;
+      const start = startOn ? new Date(`${val('start-date')}T00:00`).getTime() : null;
+      if (start && start > due) { document.getElementById('dates-err').hidden = false; return; }
+      c.due = due; c.start = start; logCard(c, `set the due date to ${dayWords(due)}`); ui.pop = null;
+      break;
+    }
+    case 'checklist': {
+      const title = val('cl-title').trim() || 'Checklist', k = { id: uid('k'), title, hideChecked: false, items: [] };
+      c.checklists.push(k); logCard(c, `added ${title} to this card`); ui.pop = null; ui.addItem = k.id; ui.focus = 'add-item-input';
+      break;
+    }
+    case 'add-item': {
+      const text = val('add-item-input').trim(), k = c.checklists.find((x) => x.id === form.dataset.k);
+      if (text) k.items.push({ id: uid('i'), t: text, done: false, assignee: null, due: null });
+      ui.focus = 'add-item-input'; break;
+    }
+    case 'item-meta': {
+      const k = c.checklists.find((x) => x.id === ui.pop.k), it = k.items.find((x) => x.id === ui.pop.i);
+      it.assignee = val('im-assignee') || null; const d = val('im-due'); it.due = d ? new Date(`${d}T17:00`).getTime() : null; ui.pop = null;
+      break;
+    }
+    case 'invite': {
+      const raw = val('invite-input').trim();
+      if (!raw) { document.getElementById('invite-err').hidden = false; return; }
+      const name = raw.includes('@') ? raw.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase()) : raw;
+      const u = uid('u'); users[u] = { name };
+      b.members.push({ u, role: val('invite-role') }); logBoard(b, `added ${name} to this board`); toast(`Invited ${name}`); ui.focus = 'invite-input';
+      break;
+    }
+    default: return;
+  }
+  render();
+});
+function saveBoardTitle() {
+  const b = B(); if (!b || ui.edit?.k !== 'board') return;
+  const v = (document.getElementById('edit-input')?.value || '').trim(); ui.edit = null;
+  if (v && v !== b.title) { logBoard(b, `renamed this board (was “${b.title}”)`); b.title = v; }
+}
+function saveListName() {
+  const b = B(); if (!b || ui.edit?.k !== 'list') return;
+  const l = b.lists.find((x) => x.id === ui.edit.id), v = (document.getElementById('edit-input')?.value || '').trim(); ui.edit = null;
+  if (l && v && v !== l.title) { logBoard(b, `renamed the list ${l.title} to ${v}`); l.title = v; }
+}
+function saveCardTitle() {
+  const b = B(); if (!b || ui.edit?.k !== 'card') return;
+  const c = findCard(b, route.card)?.card, v = (document.getElementById('edit-input')?.value || '').trim(); ui.edit = null;
+  if (c && v && v !== c.title) { logCard(c, `renamed this card (was “${c.title}”)`); c.title = v; }
+}
+document.addEventListener('focusout', (e) => {
+  if (e.target.id !== 'edit-input' || !ui.edit) return;
+  setTimeout(() => {
+    if (!ui.edit || document.activeElement?.id === 'edit-input') return;
+    ({ board: saveBoardTitle, list: saveListName, card: saveCardTitle })[ui.edit.k]();
+    render();
+  }, 0);
+});
+
+document.addEventListener('input', (e) => {
+  const t = e.target;
+  if (t.dataset.filter) {
+    const q = t.value.trim().toLowerCase(), scope = t.closest('.pop, .panel') || document;
+    scope.querySelectorAll(t.dataset.filter).forEach((el) => { el.hidden = !!q && !(el.dataset.name || '').includes(q); });
+  }
+  if (t.id === 'nb-title') {
+    const ok = !!t.value.trim();
+    document.getElementById('nb-create').disabled = !ok;
+    document.getElementById('nb-hint').textContent = ok ? 'Press Enter or Create.' : 'A title is required.';
+  }
+  if (t.id === 'lbl-name') updateLabelPreview();
+  if (t.id === 'invite-input') document.getElementById('invite-err').hidden = true;
+});
+document.addEventListener('change', (e) => {
+  const t = e.target, b = B();
+  if (t.name === 'lbl-color') updateLabelPreview();
+  if (t.id === 'start-on') document.getElementById('start-date').disabled = !t.checked;
+  if (t.id === 'mv-list') { const c = findCard(b, route.card).card; document.getElementById('mv-pos').innerHTML = posOptions(b, c, t.value); }
+  if (t.dataset.roleU) {
+    const m = b.members.find((x) => x.u === t.dataset.roleU);
+    m.role = t.value; logBoard(b, `made ${users[m.u].name} ${t.value === 'admin' ? 'an admin' : 'a member'}`); render();
+  }
+});
+function updateLabelPreview() {
+  const name = document.getElementById('lbl-name').value.trim(), color = document.querySelector('input[name=lbl-color]:checked')?.value || null;
+  document.getElementById('lbl-preview').innerHTML = chip({ name, color }, 'lg');
+  document.getElementById('lbl-err').hidden = true;
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && e.target.matches?.('article.card')) { e.preventDefault(); e.target.click(); return; }
+  if (e.key !== 'Escape') return;
+  if (ui.confirm) { ui.confirm = null; confirmFn = null; }
+  else if (ui.pop) ui.pop = null;
+  else if (ui.edit) ui.edit = null;
+  else if (ui.editComment) ui.editComment = null;
+  else if (ui.descEdit) ui.descEdit = false;
+  else if (ui.addItem) ui.addItem = null;
+  else if (ui.modal) ui.modal = null;
+  else if (route.card != null) { go('board-' + route.b); return; }
+  else if (ui.addCard) ui.addCard = null;
+  else if (ui.addList) ui.addList = false;
+  else if (ui.panel) ui.panel = null;
+  else return;
+  render();
+});
+
+/* drag and drop: cards within and between lists, lists along the board */
+function clearMarks() { document.querySelectorAll('.drop-before, .drop-end').forEach((el) => el.classList.remove('drop-before', 'drop-end')); }
+document.addEventListener('dragstart', (e) => {
+  const card = e.target.closest?.('.card[draggable="true"]'), head = e.target.closest?.('.list-head[draggable="true"]');
+  if (card && e.target === card) { ui.drag = { type: 'card', num: +card.dataset.card }; card.classList.add('dragging'); }
+  else if (head && e.target === head) {
+    const list = head.closest('.list');
+    ui.drag = { type: 'list', id: list.dataset.list }; list.classList.add('dragging');
+    e.dataTransfer.setDragImage(list, 24, 18);
+  } else return;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', '');
+});
+document.addEventListener('dragover', (e) => {
+  if (!ui.drag) return;
+  clearMarks();
+  if (ui.drag.type === 'card') {
+    const col = e.target.closest('.list');
+    if (!col) { ui.drop = null; return; }
+    e.preventDefault();
+    const box = col.querySelector('.cards');
+    const cs = [...box.querySelectorAll('.card')].filter((x) => +x.dataset.card !== ui.drag.num);
+    const before = cs.find((x) => { const r = x.getBoundingClientRect(); return e.clientY < r.top + r.height / 2; });
+    if (before) before.classList.add('drop-before'); else box.classList.add('drop-end');
+    ui.drop = { list: col.dataset.list, index: before ? cs.indexOf(before) : cs.length };
+  } else {
+    const lanes = e.target.closest('#lanes');
+    if (!lanes) { ui.drop = null; return; }
+    e.preventDefault();
+    const ls = [...lanes.querySelectorAll('.list')].filter((x) => x.dataset.list !== ui.drag.id);
+    const before = ls.find((x) => { const r = x.getBoundingClientRect(); return e.clientX < r.left + r.width / 2; });
+    if (before) before.classList.add('drop-before'); else lanes.classList.add('drop-end');
+    ui.drop = { index: before ? ls.indexOf(before) : ls.length };
+  }
+});
+document.addEventListener('drop', (e) => {
+  if (!ui.drag || !ui.drop) return;
+  e.preventDefault();
+  const b = B();
+  if (ui.drag.type === 'card') moveCard(b, findCard(b, ui.drag.num).card, ui.drop.list, ui.drop.index);
+  else moveList(b, ui.drag.id, ui.drop.index);
+  ui.drag = ui.drop = null;
+  render();
+});
+document.addEventListener('dragend', () => { ui.drag = ui.drop = null; clearMarks(); document.querySelectorAll('.dragging').forEach((x) => x.classList.remove('dragging')); });
+window.addEventListener('resize', placePop);
+
+if (route.view === 'board' && byId(route.b)) ui.recent = [route.b, ...ui.recent.filter((x) => x !== route.b)];
+render();
+</script>
 </body>
 </html>
