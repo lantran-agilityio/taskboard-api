@@ -155,3 +155,10 @@ GitHub Actions runs the same checks on every pull request and every push to `mai
 13. Requirements with IDs and acceptance criteria ([`docs/requirements.md`](docs/requirements.md))
 14. Clickable UI prototype built from the requirements only ([`prototype/`](prototype/))
 15. Build plan: requirements mapped to the API, gaps, frontend build order ([`docs/build-plan.md`](docs/build-plan.md))
+16. Labels: six default labels on a new board, optional label names
+17. Board details: description and a per-user star
+18. Close and reopen boards
+19. Restore lists and cards to their original position; sort a list once
+20. Card and activity reads for the UI: comment counts, one comment, activity filters, board snapshot
+21. Checklists on cards
+22. Frontend (steps 22–28 in [`docs/build-plan.md`](docs/build-plan.md#frontend-build-order)), after the stack is agreed
