@@ -2,7 +2,11 @@
 
 [![CI](https://github.com/lantran-agilityio/taskboard-api/actions/workflows/ci.yml/badge.svg)](https://github.com/lantran-agilityio/taskboard-api/actions/workflows/ci.yml)
 
-A Trello-style task board API built with FastAPI, SQLAlchemy and PostgreSQL: boards, lists and cards.
+A practice project for reverse engineering a product with AI, on top of a working Trello-style task board API (FastAPI, SQLAlchemy, PostgreSQL).
+
+## Purpose
+
+Learn how to work with AI to reverse engineer an existing product (Trello) into a UI and a build plan: observe its public behaviour, write requirements in our own words, design a clickable prototype from those requirements alone, and plan the build. The API in this repo (roadmap steps 1–11) is the backend the plan builds on and the answer key it is checked against. The workflow and its clean-room rules are in [`docs/`](docs/README.md).
 
 ## Run
 
@@ -147,3 +151,7 @@ GitHub Actions runs the same checks on every pull request and every push to `mai
 9. Card details: due dates, labels and assignees; filter cards by them
 10. Archive and restore lists and cards instead of deleting them
 11. Comments on cards and a board activity log, with pagination
+12. Observe Trello's public behaviour, one area at a time ([`docs/observations/`](docs/observations/))
+13. Requirements with IDs and acceptance criteria ([`docs/requirements.md`](docs/requirements.md))
+14. Clickable UI prototype built from the requirements only ([`prototype/`](prototype/))
+15. Build plan: requirements mapped to the API, gaps, frontend build order ([`docs/build-plan.md`](docs/build-plan.md))
