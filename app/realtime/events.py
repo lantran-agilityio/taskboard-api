@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.models.activity import Activity
 from app.models.board import Board
 from app.models.board_list import BoardList
 
@@ -30,18 +31,34 @@ class EventType(StrEnum):
     MEMBER_ADDED = "member.added"
     MEMBER_UPDATED = "member.updated"
     MEMBER_REMOVED = "member.removed"
+    COMMENT_CREATED = "comment.created"
+    COMMENT_UPDATED = "comment.updated"
+    COMMENT_DELETED = "comment.deleted"
 
 
 def publish(
-    db: Session, board_id: int, event_type: EventType, data: dict[str, Any]
+    db: Session,
+    board_id: int,
+    event_type: EventType,
+    data: dict[str, Any],
+    *,
+    actor_id: int,
 ) -> None:
-    """Queue an event for everyone watching the board.
+    """Log an event in the board's activity and queue it for everyone watching.
 
     Call it inside the request's transaction, after flush and before commit:
-    Postgres delivers a NOTIFY only when its transaction commits, so a request
-    that fails or rolls back never announces a change that didn't happen.
+    Postgres delivers a NOTIFY only when its transaction commits, and the log
+    entry is written in the same transaction, so a request that fails or rolls
+    back neither announces nor logs a change that didn't happen.
     """
-    payload = json.dumps({"type": event_type, "board_id": board_id, "data": data})
+    # A deleted board's log is deleted with it (by the database's cascade).
+    if event_type is not EventType.BOARD_DELETED:
+        db.add(
+            Activity(board_id=board_id, actor_id=actor_id, type=event_type, data=data)
+        )
+    payload = json.dumps(
+        {"type": event_type, "board_id": board_id, "actor_id": actor_id, "data": data}
+    )
     db.execute(select(func.pg_notify(CHANNEL, payload)))
 
 

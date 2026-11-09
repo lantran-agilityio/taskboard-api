@@ -69,6 +69,24 @@ While a list is archived, its cards are frozen with it:
 
 Viewers can see archived items; editors and owners can archive and restore.
 
+## Comments and activity
+
+Comments belong to a card:
+- `POST /cards/{card_id}/comments` with `{"body": "..."}` (1–5000 characters), and `GET /cards/{card_id}/comments`, newest first.
+- `PATCH /comments/{comment_id}` changes the body and sets `edited_at`. Only the comment's author can do it.
+- `DELETE /comments/{comment_id}` can be done by the author or the board's owner.
+- Viewers read comments. Editors and owners write them.
+- On an archived card, or a card in an archived list, comments can be read and deleted but not written or edited (422).
+- Deleting a card deletes its comments. A member who leaves the board keeps their comments.
+
+`GET /boards/{board_id}/activity` is the board's log, newest first. Each entry is an event from the table below (`id`, `type`, `actor_id`, `data`, `created_at`), so the log and the WebSocket always agree. Anyone on the board can read it.
+
+Both lists are paginated with a cursor:
+- `?limit=` sets the page size (1–100, default 20).
+- Each page is `{"items": [...], "next_before": 42}`. Pass `?before=42` for the next, older page.
+- On the last page, `next_before` is `null`.
+- Entries added while you page through don't shift later pages, so nothing is shown twice.
+
 ## Realtime
 
 Anyone who can view a board can watch it over a WebSocket and get an event for every change, as soon as it's committed.
@@ -77,22 +95,24 @@ Anyone who can view a board can watch it over a WebSocket and get an event for e
 2. Within 5 seconds, send `{"type": "auth", "token": "<access token>"}` (the token from `POST /auth/token`; it never goes in the URL).
 3. The server answers `{"type": "ready"}`, then sends events. Send `{"type": "ping"}` any time to get `{"type": "pong"}`.
 
-Events look like `{"type": "card.updated", "board_id": 1, "data": {...}}`:
+Events look like `{"type": "card.updated", "board_id": 1, "actor_id": 2, "data": {...}}`, where `actor_id` is the user who made the change:
 
 | type | data |
 |---|---|
 | `board.updated` | `board` |
 | `board.deleted` | `{}` (then the socket closes with 4404) |
 | `list.created`, `list.updated` | `list`, `list_ids` (the board's lists in their new order) |
-| `list.deleted` | `list_id`, `list_ids` |
+| `list.deleted` | `list_id`, `name`, `list_ids` |
 | `list.archived`, `list.restored` | `list`, `list_ids` (an archived list is gone from `list_ids`, like a deleted one) |
 | `card.created`, `card.updated` | `card`, `lists: [{list_id, card_ids}]` (each affected list in its new order; both lists for a move between lists) |
-| `card.deleted` | `card_id`, `lists` |
+| `card.deleted` | `card_id`, `title`, `lists` |
 | `card.archived`, `card.restored` | `card`, `lists` |
 | `label.created`, `label.updated` | `label` |
-| `label.deleted` | `label_id` (drop it from every card's `label_ids`) |
+| `label.deleted` | `label_id`, `name` (drop it from every card's `label_ids`) |
 | `member.added`, `member.updated` | `member` |
 | `member.removed` | `user_id` (drop them from every card's `assignee_ids`; that user's sockets on the board then close with 4404) |
+| `comment.created`, `comment.updated` | `comment` |
+| `comment.deleted` | `comment_id`, `card_id` |
 
 The server may also send `{"type": "resync"}`: it may have missed changes (for example after a database restart), so refetch the board. The socket stays open.
 

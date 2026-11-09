@@ -389,6 +389,7 @@ def shared_board(client: TestClient) -> dict:
         f"/lists/{lists['A']['id']}/cards", json={"title": "Old"}
     ).json()
     client.post(f"/cards/{archived_card['id']}/archive")
+    comment = client.post(f"/cards/{card['id']}/comments", json={"body": "Hi"}).json()
     return {
         "board": board,
         "lists": lists,
@@ -396,6 +397,7 @@ def shared_board(client: TestClient) -> dict:
         "label": label,
         "archived_list": archived_list,
         "archived_card": archived_card,
+        "comment": comment,
     }
 
 
@@ -414,6 +416,9 @@ def snapshot(client: TestClient, ids: dict) -> dict:
         "archived cards": client.get(
             f"/boards/{board_id}/cards", params={"archived": True}
         ).json(),
+        "comments": client.get(f"/cards/{ids['card']['id']}/comments").json(),
+        # A refused request must not be logged either.
+        "activity": client.get(f"/boards/{board_id}/activity").json(),
     }
 
 
@@ -542,6 +547,32 @@ ACTIONS: dict[str, tuple[Request, int, int]] = {
         lambda s: ("DELETE", f"/labels/{s['label']['id']}", None),
         403,
         204,
+    ),
+    "read comments": (
+        lambda s: ("GET", f"/cards/{s['card']['id']}/comments", None),
+        200,
+        200,
+    ),
+    "comment": (
+        lambda s: ("POST", f"/cards/{s['card']['id']}/comments", {"body": "Me too"}),
+        403,
+        201,
+    ),
+    # The comment is Alice's: only she edits it, and she or the owner deletes it.
+    "edit someone's comment": (
+        lambda s: ("PATCH", f"/comments/{s['comment']['id']}", {"body": "Mine"}),
+        403,
+        403,
+    ),
+    "delete someone's comment": (
+        lambda s: ("DELETE", f"/comments/{s['comment']['id']}", None),
+        403,
+        403,
+    ),
+    "read activity": (
+        lambda s: ("GET", f"/boards/{s['board']['id']}/activity", None),
+        200,
+        200,
     ),
 }
 

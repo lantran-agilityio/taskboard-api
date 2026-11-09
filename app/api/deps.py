@@ -1,6 +1,7 @@
+from dataclasses import dataclass
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -28,3 +29,22 @@ def get_current_user(
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+@dataclass
+class PageParams:
+    limit: int
+    before: int | None
+
+
+def page_params(
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    before: Annotated[
+        int | None, Query(ge=1, description="next_before from the previous page")
+    ] = None,
+) -> PageParams:
+    return PageParams(limit, before)
+
+
+# The `limit` and `before` query parameters of a paginated endpoint.
+Pagination = Annotated[PageParams, Depends(page_params)]

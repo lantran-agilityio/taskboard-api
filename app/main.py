@@ -3,11 +3,14 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api.routes.activity import router as activity_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.auth import users_router
 from app.api.routes.boards import router as boards_router
 from app.api.routes.cards import board_cards_router, list_cards_router
 from app.api.routes.cards import router as cards_router
+from app.api.routes.comments import card_comments_router
+from app.api.routes.comments import router as comments_router
 from app.api.routes.health import router as health_router
 from app.api.routes.labels import board_labels_router
 from app.api.routes.labels import router as labels_router
@@ -33,7 +36,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title=settings.app_name,
-    description="Trello-style task board API: boards, lists, cards and labels.",
+    description="Trello-style task board API: boards, lists, cards, labels and comments.",
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -48,6 +51,9 @@ app.include_router(lists_router)
 app.include_router(list_cards_router)
 app.include_router(cards_router)
 app.include_router(board_cards_router)
+app.include_router(card_comments_router)
+app.include_router(comments_router)
 app.include_router(board_labels_router)
 app.include_router(labels_router)
+app.include_router(activity_router)
 app.include_router(realtime_router)

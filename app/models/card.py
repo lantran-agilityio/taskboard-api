@@ -16,6 +16,7 @@ from app.models.card_details import card_assignees, card_labels
 
 if TYPE_CHECKING:
     from app.models.board_list import BoardList
+    from app.models.comment import Comment
     from app.models.label import Label
     from app.models.user import User
 
@@ -48,6 +49,11 @@ class Card(Base):
     )
     assignees: Mapped[list["User"]] = relationship(
         secondary=card_assignees, order_by="User.id"
+    )
+    # passive_deletes: the database's cascade deletes a card's comments, so
+    # deleting a card (or its list or board) doesn't load them first.
+    comments: Mapped[list["Comment"]] = relationship(
+        back_populates="card", cascade="all, delete-orphan", passive_deletes=True
     )
 
     @property

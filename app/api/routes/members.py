@@ -22,10 +22,14 @@ def member_read(member: BoardMember) -> MemberRead:
 
 
 def publish_member(
-    db: Session, board: Board, event_type: EventType, member: BoardMember
+    db: Session,
+    board: Board,
+    event_type: EventType,
+    member: BoardMember,
+    actor_id: int,
 ) -> None:
     data = {"member": member_read(member).model_dump(mode="json")}
-    publish(db, board.id, event_type, data)
+    publish(db, board.id, event_type, data, actor_id=actor_id)
 
 
 def find_member(board: Board, user_id: int) -> BoardMember:
@@ -50,20 +54,23 @@ def list_members(board: ViewableBoard) -> list[MemberRead]:
 
 @router.post("", response_model=MemberRead, status_code=status.HTTP_201_CREATED)
 def add_member(
-    payload: MemberCreate, board: OwnedBoard, db: Session = Depends(get_db)
+    payload: MemberCreate,
+    board: OwnedBoard,
+    user: CurrentUser,
+    db: Session = Depends(get_db),
 ) -> MemberRead:
-    user = db.scalar(select(User).where(User.email == payload.email))
-    if user is None:
+    new_user = db.scalar(select(User).where(User.email == payload.email))
+    if new_user is None:
         raise body_validation_error("email", "No user with this email", payload.email)
-    if board_role(board, user.id) is not None:
+    if board_role(board, new_user.id) is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="User is already on this board",
         )
-    member = BoardMember(user=user, role=payload.role)
+    member = BoardMember(user=new_user, role=payload.role)
     board.members.append(member)
     db.flush()
-    publish_member(db, board, EventType.MEMBER_ADDED, member)
+    publish_member(db, board, EventType.MEMBER_ADDED, member, user.id)
     db.commit()
     return member_read(member)
 
@@ -73,12 +80,13 @@ def change_role(
     user_id: int,
     payload: MemberUpdate,
     board: OwnedBoard,
+    user: CurrentUser,
     db: Session = Depends(get_db),
 ) -> MemberRead:
     member = find_member(board, user_id)
     member.role = payload.role
     db.flush()
-    publish_member(db, board, EventType.MEMBER_UPDATED, member)
+    publish_member(db, board, EventType.MEMBER_UPDATED, member, user.id)
     db.commit()
     return member_read(member)
 
@@ -103,5 +111,7 @@ def remove_member(
     unassign_from_board(db, board.id, user_id)
     db.flush()
     # Also closes that user's sockets on this board.
-    publish(db, board.id, EventType.MEMBER_REMOVED, {"user_id": user_id})
+    publish(
+        db, board.id, EventType.MEMBER_REMOVED, {"user_id": user_id}, actor_id=user.id
+    )
     db.commit()

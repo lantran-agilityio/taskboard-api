@@ -22,6 +22,7 @@ from app.models.board import Board
 from app.models.board_list import BoardList
 from app.models.board_member import BoardRole
 from app.models.card import Card
+from app.models.comment import Comment
 from app.models.label import Label
 from app.services.permissions import allows, board_role
 
@@ -105,6 +106,25 @@ def label_access(minimum: BoardRole) -> Callable[..., Label]:
     return dependency
 
 
+def comment_access(minimum: BoardRole) -> Callable[..., Comment]:
+    def dependency(
+        comment_id: int, user: CurrentUser, db: Session = Depends(get_db)
+    ) -> Comment:
+        board_id = db.scalar(
+            select(BoardList.board_id)
+            .join(Card, Card.list_id == BoardList.id)
+            .join(Comment, Comment.card_id == Card.id)
+            .where(Comment.id == comment_id)
+        )
+        load_board(db, board_id, user.id, minimum, "Comment not found")
+        comment = db.get(Comment, comment_id)
+        if comment is None:  # deleted while this request waited for the lock
+            raise HTTPException(status_code=404, detail="Comment not found")
+        return comment
+
+    return dependency
+
+
 ViewableBoard = Annotated[Board, Depends(board_access(BoardRole.VIEWER))]
 EditableBoard = Annotated[Board, Depends(board_access(BoardRole.EDITOR))]
 OwnedBoard = Annotated[Board, Depends(board_access(BoardRole.OWNER))]
@@ -114,3 +134,4 @@ ViewableCard = Annotated[Card, Depends(card_access(BoardRole.VIEWER))]
 EditableCard = Annotated[Card, Depends(card_access(BoardRole.EDITOR))]
 ViewableLabel = Annotated[Label, Depends(label_access(BoardRole.VIEWER))]
 EditableLabel = Annotated[Label, Depends(label_access(BoardRole.EDITOR))]
+EditableComment = Annotated[Comment, Depends(comment_access(BoardRole.EDITOR))]
