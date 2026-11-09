@@ -72,8 +72,7 @@ def test_entry_has_the_events_data_and_actor(client: TestClient, board: dict) ->
         "created_at": deleted["created_at"],
     }
     assert deleted["created_at"].endswith("Z")
-    assert created["data"]["list"]["id"] == board_list["id"]
-    assert created["data"]["list"]["name"] == "To do"
+    assert created["data"]["list"] == board_list
 
 
 def test_member_changes_are_logged_with_their_actor(

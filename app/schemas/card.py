@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import Annotated, Self
 
 from pydantic import (
@@ -67,7 +66,7 @@ class CardRead(BaseModel):
     title: str
     description: str | None
     position: int | None  # None while archived
-    created_at: datetime
+    created_at: UtcDatetime
     archived_at: UtcDatetime | None
     due_at: UtcDatetime | None
     due_complete: bool

@@ -161,3 +161,19 @@ def test_other_users_board_returns_404(
     assert response.status_code == 404
     assert response.json() == {"detail": "Board not found"}
     assert client.get(f"/boards/{board['id']}").json() == board
+
+
+def test_timestamps_are_in_utc(client: TestClient) -> None:
+    # Postgres returns timestamptz in the connection's time zone; the API
+    # answers in UTC everywhere, as it already did for due_at and archived_at.
+    board = client.post("/boards", json={"name": "UTC"}).json()
+    board_list = client.post(f"/boards/{board['id']}/lists", json={"name": "L"}).json()
+    card = client.post(f"/lists/{board_list['id']}/cards", json={"title": "C"}).json()
+    responses = [
+        client.get("/users/me").json(),
+        client.get(f"/boards/{board['id']}").json(),
+        client.get(f"/lists/{board_list['id']}").json(),
+        client.get(f"/cards/{card['id']}").json(),
+    ]
+
+    assert [item["created_at"][-1] for item in responses] == ["Z"] * 4

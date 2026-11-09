@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -28,5 +27,5 @@ class ListRead(BaseModel):
     board_id: int
     name: str
     position: int | None  # None while archived
-    created_at: datetime
+    created_at: UtcDatetime
     archived_at: UtcDatetime | None

@@ -1,7 +1,8 @@
-from datetime import datetime
 from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, Field
+
+from app.schemas.common import UtcDatetime
 
 # Lowercased so Alice@example.com and alice@example.com are the same account.
 Email = Annotated[EmailStr, AfterValidator(str.lower)]
@@ -17,4 +18,4 @@ class UserRead(BaseModel):
 
     id: int
     email: str
-    created_at: datetime
+    created_at: UtcDatetime
