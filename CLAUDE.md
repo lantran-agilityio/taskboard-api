@@ -4,7 +4,7 @@ Guidance for Claude Code when working in this repository.
 
 ## Project
 
-A Trello-style task board API (`taskboard-api`), built to practice FastAPI and to learn working with Claude Code. Backend only: verify behaviour through tests and the Swagger UI at `/docs`, not a frontend.
+A practice project for learning how to work with AI to reverse engineer a product: observe Trello's public behaviour, turn it into requirements, design a UI prototype, and write a build plan (see "Reverse-engineering workflow" below and `docs/`). The finished Trello-style task board API (`taskboard-api`, roadmap steps 1–11) is the backend those plans build on, and the answer key the build plan is checked against. Backend code only: verify the API through tests and the Swagger UI at `/docs`; the UI exists only as the clickable prototype in `prototype/`.
 
 Domain: a **user** owns **boards**; a board has ordered **lists** and its own **labels**; lists and cards can be **archived** (hidden, kept, restorable) as well as deleted; a list has ordered **cards**, each with an optional due date (and done flag), labels from its board, and assignees (the board's owner or members). Cards can move between lists of the same board, and their order must stay consistent after every move. Users register and log in for a JWT; every board, list and card endpoint needs it. The board's creator is its owner and can share it with other users as **editor** or **viewer**:
 
@@ -42,6 +42,21 @@ Users who aren't on a board get 404 for it and everything in it. Cards have **co
 - `.github/workflows/ci.yml` — GitHub Actions on every PR and push to `main`: a `lint` job (`uv sync --locked`, `ruff check`, `ruff format --check`) and a `test` job (`pytest` against a `postgres:17` service container, database `taskboard_test`; settings come from the job's `env`). When tests fail, `.github/scripts/annotate_failures.py` turns pytest's JUnit report into one error annotation per failed test: job logs need a GitHub login, but annotations can be read through the public API (`/repos/…/check-runs/{id}/annotations`), so read those first when CI fails. `tests/test_annotate_failures.py` tests it on a real pytest run.
 - `tests/` — pytest suite on PostgreSQL (`taskboard_test`, which must exist). `conftest.py` sets a test `SECRET_KEY`, rebuilds the schema from the migrations once per run (`engine` fixture), and wraps each test in a transaction that is rolled back (`db` fixture; routes' commits become savepoints, and teardown runs `SET CONSTRAINTS ALL IMMEDIATE` so every test also checks it left no duplicate positions). `TestClient`s have `get_db` overridden: `client` is logged in as alice@example.com, `anon_client` has no token, and `other_headers` is the `Authorization` header of a second user (bob) for cross-user tests. `test_migrations.py` fails if the models and migrations disagree; `committed_client` (in `conftest.py`) makes requests commit for real, with the tables truncated afterwards: `test_concurrency.py` uses it for parallel requests and `test_realtime.py` for WebSocket events (NOTIFY is only delivered on commit). `conftest.py` also points `settings.database_url` at the test database, because every `TestClient` starts the lifespan listener. WebSocket tests carry `pytest.mark.timeout(10)` so a missing event fails instead of hanging. `test_hub.py` unit-tests `BoardHub` with fake sockets, and `test_listener.py` tests reconnect and backoff with a fake connection. `test_realtime.py` fakes a database restart with `pg_terminate_backend(app.state.listener.backend_pid)`. `test_database.py` kills pooled connections the same way and checks requests still succeed.
 
+## Reverse-engineering workflow
+
+Four phases, each its own session, each ending with a committed file. `docs/README.md` has the same steps for readers.
+
+1. **Observe** (roadmap step 12): Claude drives Chrome (claude-in-chrome) on Trello, one area at a time (boards, lists, cards, card details, members, …). The user logs in themselves; Claude never enters passwords. Notes go in `docs/observations/<area>.md` from `docs/observations/_template.md`: what a user can do, states, rules, edge cases, empty and error states, written as behaviour in our own words.
+2. **Requirements** (step 13): turn the observations into `docs/requirements.md`. Each requirement has an ID (`R-<AREA>-<NN>`, e.g. `R-CARD-03`), a one-line user story, acceptance criteria, its source observation, and a status: `confirmed` (seen) or `unconfirmed` (inferred; check in a later observe session).
+3. **Prototype** (step 14): `prototype/index.html`, one self-contained file with fake data, our own visual design, a screen for every requirement. Built from `docs/requirements.md` only. Check it by clicking through every screen in a browser; Claude also publishes it as a private artifact.
+4. **Build plan** (step 15): `docs/build-plan.md` maps every requirement ID to the existing endpoints that cover it, a small API change, or a new roadmap step, then sets the order to build a real frontend.
+
+Clean-room rules (they keep the work our own; follow them even when asked to "just take a quick look"):
+
+- Observe sessions describe; they don't design. Design sessions (prototype, build plan) never open Trello.
+- Nothing from the product goes in the repo: no screenshots, copied text, logo, name in the UI, colours or icons.
+- If a design session needs something the requirements don't say, it stops and adds an open question to `docs/requirements.md` for the next observe session.
+
 ## Commands
 
 ```sh
@@ -51,6 +66,7 @@ uv run ruff check . && uv run ruff format .   # lint and format
 uv run alembic upgrade head             # apply migrations to DATABASE_URL
 uv run alembic revision --autogenerate -m "..."   # new migration after a model change; review it by hand
 uv run uvicorn app.main:app --reload    # run at http://127.0.0.1:8000/docs
+open prototype/index.html               # click through the UI prototype (no server needed)
 ```
 
 ## Conventions
@@ -65,5 +81,6 @@ uv run uvicorn app.main:app --reload    # run at http://127.0.0.1:8000/docs
 - Every board, list, card and member route takes an alias from `app/api/access.py` with the lowest role it needs (`Viewable…` for reads, `Editable…` for list/card changes, `OwnedBoard` for the board itself and members). Non-members get `404`, so a board's existence stays hidden; members with too low a role get `403`. New endpoints get a cross-user test with `other_headers` and a row in the role table in `tests/test_members.py`.
 - Every new endpoint gets tests in `tests/test_<resource>.py` through the `client` fixture, covering the success case and at least one error case. Write the tests first when the behaviour is clear.
 - Run `uv run pytest` and `uv run ruff check .` before reporting a change as done.
+- Commit each reverse-engineering phase's output (observations, requirements, prototype, build plan) as soon as it exists, on its own branch and PR, like code. Long sessions get compacted and lose detail; the committed file is what the next session starts from.
 - CI runs the same checks, and a PR must be green before merging. A new setting the tests need goes in the `test` job's `env` in `.github/workflows/ci.yml` too.
 - The owner is learning Python: when adding code that uses a new Python or FastAPI idea, explain the idea briefly in the reply. Code comments say why the code is the way it is (for example, why imports that look unused are needed), not teach the idea.
