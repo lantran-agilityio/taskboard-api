@@ -1,8 +1,6 @@
-from datetime import datetime
-
 from pydantic import BaseModel, ConfigDict
 
-from app.schemas.common import Name
+from app.schemas.common import Name, UtcDatetime
 
 
 class BoardCreate(BaseModel):
@@ -18,4 +16,4 @@ class BoardRead(BaseModel):
 
     id: int
     name: str
-    created_at: datetime
+    created_at: UtcDatetime

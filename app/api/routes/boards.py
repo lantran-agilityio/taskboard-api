@@ -50,6 +50,7 @@ def get_board(board: ViewableBoard) -> Board:
 def rename_board(
     payload: BoardUpdate,
     board: OwnedBoard,
+    user: CurrentUser,
     db: Session = Depends(get_db),
 ) -> Board:
     board.name = payload.name
@@ -59,6 +60,7 @@ def rename_board(
         board.id,
         EventType.BOARD_UPDATED,
         {"board": BoardRead.model_validate(board).model_dump(mode="json")},
+        actor_id=user.id,
     )
     db.commit()
     db.refresh(board)
@@ -66,8 +68,10 @@ def rename_board(
 
 
 @router.delete("/{board_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_board(board: OwnedBoard, db: Session = Depends(get_db)) -> None:
+def delete_board(
+    board: OwnedBoard, user: CurrentUser, db: Session = Depends(get_db)
+) -> None:
     # Before deleting, so watchers learn why their sockets are about to close.
-    publish(db, board.id, EventType.BOARD_DELETED, {})
+    publish(db, board.id, EventType.BOARD_DELETED, {}, actor_id=user.id)
     db.delete(board)
     db.commit()

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.access import EditableBoard, EditableList, ViewableBoard, ViewableList
+from app.api.deps import CurrentUser
 from app.api.errors import body_validation_error, validation_error
 from app.core.database import get_db
 from app.models.board_list import BoardList
@@ -19,7 +20,9 @@ board_lists_router = APIRouter(prefix="/boards/{board_id}/lists", tags=["lists"]
 router = APIRouter(prefix="/lists", tags=["lists"])
 
 
-def publish_list(db: Session, event_type: EventType, board_list: BoardList) -> None:
+def publish_list(
+    db: Session, event_type: EventType, board_list: BoardList, actor_id: int
+) -> None:
     publish(
         db,
         board_list.board_id,
@@ -28,6 +31,7 @@ def publish_list(db: Session, event_type: EventType, board_list: BoardList) -> N
             "list": ListRead.model_validate(board_list).model_dump(mode="json"),
             "list_ids": list_order(board_list.board),
         },
+        actor_id=actor_id,
     )
 
 
@@ -43,12 +47,13 @@ def check_archived(board_list: BoardList, archived: bool, message: str) -> None:
 def create_list(
     payload: ListCreate,
     board: EditableBoard,
+    user: CurrentUser,
     db: Session = Depends(get_db),
 ) -> BoardList:
     board_list = BoardList(name=payload.name, position=len(board.active_lists))
     board.lists.append(board_list)
     db.flush()  # gives the new list its id for the event
-    publish_list(db, EventType.LIST_CREATED, board_list)
+    publish_list(db, EventType.LIST_CREATED, board_list, user.id)
     db.commit()
     db.refresh(board_list)
     return board_list
@@ -71,6 +76,7 @@ def get_list(board_list: ViewableList) -> BoardList:
 def update_list(
     payload: ListUpdate,
     board_list: EditableList,
+    user: CurrentUser,
     db: Session = Depends(get_db),
 ) -> BoardList:
     check_archived(board_list, False, "List is archived; restore it first")
@@ -85,39 +91,45 @@ def update_list(
     if payload.name is not None:
         board_list.name = payload.name
     db.flush()
-    publish_list(db, EventType.LIST_UPDATED, board_list)
+    publish_list(db, EventType.LIST_UPDATED, board_list, user.id)
     db.commit()
     db.refresh(board_list)
     return board_list
 
 
 @router.post("/{list_id}/archive", response_model=ListRead)
-def archive_list(board_list: EditableList, db: Session = Depends(get_db)) -> BoardList:
+def archive_list(
+    board_list: EditableList, user: CurrentUser, db: Session = Depends(get_db)
+) -> BoardList:
     check_archived(board_list, False, "List is already archived")
     remove_item(board_list.board.active_lists, board_list)
     board_list.position = None
     board_list.archived_at = datetime.now(UTC)
     db.flush()
-    publish_list(db, EventType.LIST_ARCHIVED, board_list)
+    publish_list(db, EventType.LIST_ARCHIVED, board_list, user.id)
     db.commit()
     db.refresh(board_list)
     return board_list
 
 
 @router.post("/{list_id}/restore", response_model=ListRead)
-def restore_list(board_list: EditableList, db: Session = Depends(get_db)) -> BoardList:
+def restore_list(
+    board_list: EditableList, user: CurrentUser, db: Session = Depends(get_db)
+) -> BoardList:
     check_archived(board_list, True, "List is not archived")
     board_list.position = len(board_list.board.active_lists)  # back at the end
     board_list.archived_at = None
     db.flush()
-    publish_list(db, EventType.LIST_RESTORED, board_list)
+    publish_list(db, EventType.LIST_RESTORED, board_list, user.id)
     db.commit()
     db.refresh(board_list)
     return board_list
 
 
 @router.delete("/{list_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_list(board_list: EditableList, db: Session = Depends(get_db)) -> None:
+def delete_list(
+    board_list: EditableList, user: CurrentUser, db: Session = Depends(get_db)
+) -> None:
     board = board_list.board
     if not board_list.is_archived:
         remove_item(board.active_lists, board_list)
@@ -127,6 +139,12 @@ def delete_list(board_list: EditableList, db: Session = Depends(get_db)) -> None
         db,
         board.id,
         EventType.LIST_DELETED,
-        {"list_id": board_list.id, "list_ids": list_order(board)},
+        # The name too, so the activity log can still say what was deleted.
+        {
+            "list_id": board_list.id,
+            "name": board_list.name,
+            "list_ids": list_order(board),
+        },
+        actor_id=user.id,
     )
     db.commit()

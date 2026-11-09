@@ -14,6 +14,7 @@ from app.api.access import (
     ViewableCard,
     ViewableList,
 )
+from app.api.deps import CurrentUser
 from app.api.errors import body_validation_error, validation_error
 from app.core.database import get_db
 from app.models.board import Board
@@ -60,6 +61,7 @@ def card_details(
 def create_card(
     payload: CardCreate,
     board_list: EditableList,
+    user: CurrentUser,
     db: Session = Depends(get_db),
 ) -> Card:
     if board_list.is_archived:
@@ -79,7 +81,7 @@ def create_card(
     )
     board_list.cards.append(card)
     db.flush()  # gives the new card its id for the event
-    publish_card(db, EventType.CARD_CREATED, card, [board_list])
+    publish_card(db, EventType.CARD_CREATED, card, [board_list], user.id)
     db.commit()
     db.refresh(card)
     return card
@@ -135,7 +137,11 @@ def search_cards(
 
 
 def publish_card(
-    db: Session, event_type: EventType, card: Card, lists: list[BoardList]
+    db: Session,
+    event_type: EventType,
+    card: Card,
+    lists: list[BoardList],
+    actor_id: int,
 ) -> None:
     publish(
         db,
@@ -145,6 +151,7 @@ def publish_card(
             "card": CardRead.model_validate(card).model_dump(mode="json"),
             "lists": [card_order(board_list) for board_list in lists],
         },
+        actor_id=actor_id,
     )
 
 
@@ -166,6 +173,7 @@ def find_target_list(card: Card, list_id: int | None, db: Session) -> BoardList:
 def update_card(
     payload: CardUpdate,
     card: EditableCard,
+    user: CurrentUser,
     db: Session = Depends(get_db),
 ) -> Card:
     # Check everything before changing anything, so a 422 leaves the card as it was.
@@ -209,14 +217,16 @@ def update_card(
     db.flush()
     # A cross-list move changes the order of both lists.
     affected = [current] if target is current else [current, target]
-    publish_card(db, EventType.CARD_UPDATED, card, affected)
+    publish_card(db, EventType.CARD_UPDATED, card, affected, user.id)
     db.commit()
     db.refresh(card)
     return card
 
 
 @router.post("/{card_id}/archive", response_model=CardRead)
-def archive_card(card: EditableCard, db: Session = Depends(get_db)) -> Card:
+def archive_card(
+    card: EditableCard, user: CurrentUser, db: Session = Depends(get_db)
+) -> Card:
     board_list = card.board_list
     if card.is_archived:
         raise validation_error("path", "card_id", "Card is already archived", card.id)
@@ -226,14 +236,16 @@ def archive_card(card: EditableCard, db: Session = Depends(get_db)) -> Card:
     card.position = None
     card.archived_at = datetime.now(UTC)
     db.flush()
-    publish_card(db, EventType.CARD_ARCHIVED, card, [board_list])
+    publish_card(db, EventType.CARD_ARCHIVED, card, [board_list], user.id)
     db.commit()
     db.refresh(card)
     return card
 
 
 @router.post("/{card_id}/restore", response_model=CardRead)
-def restore_card(card: EditableCard, db: Session = Depends(get_db)) -> Card:
+def restore_card(
+    card: EditableCard, user: CurrentUser, db: Session = Depends(get_db)
+) -> Card:
     board_list = card.board_list
     if not card.is_archived:
         raise validation_error("path", "card_id", "Card is not archived", card.id)
@@ -244,14 +256,16 @@ def restore_card(card: EditableCard, db: Session = Depends(get_db)) -> Card:
     card.position = len(board_list.active_cards)  # back at the end
     card.archived_at = None
     db.flush()
-    publish_card(db, EventType.CARD_RESTORED, card, [board_list])
+    publish_card(db, EventType.CARD_RESTORED, card, [board_list], user.id)
     db.commit()
     db.refresh(card)
     return card
 
 
 @router.delete("/{card_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_card(card: EditableCard, db: Session = Depends(get_db)) -> None:
+def delete_card(
+    card: EditableCard, user: CurrentUser, db: Session = Depends(get_db)
+) -> None:
     board_list = card.board_list
     # Only archived cards have no position; a card in an archived list still
     # does, and its list must stay dense for when the list is restored.
@@ -263,6 +277,8 @@ def delete_card(card: EditableCard, db: Session = Depends(get_db)) -> None:
         db,
         board_list.board_id,
         EventType.CARD_DELETED,
-        {"card_id": card.id, "lists": [card_order(board_list)]},
+        # The title too, so the activity log can still say what was deleted.
+        {"card_id": card.id, "title": card.title, "lists": [card_order(board_list)]},
+        actor_id=user.id,
     )
     db.commit()

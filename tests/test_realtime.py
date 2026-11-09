@@ -41,6 +41,10 @@ def close_code(ws: WebSocketTestSession) -> int:
     return closed.value.code
 
 
+def alice_id(client: TestClient) -> int:
+    return client.get("/users/me").json()["id"]
+
+
 def make_board(client: TestClient, name: str = "Live") -> int:
     return client.post("/boards", json={"name": name}).json()["id"]
 
@@ -156,6 +160,7 @@ def test_board_events(committed_client: TestClient) -> None:
         assert ws.receive_json() == {
             "type": "board.deleted",
             "board_id": board_id,
+            "actor_id": alice_id(committed_client),
             "data": {},
         }
         assert close_code(ws) == 4404
@@ -181,7 +186,11 @@ def test_list_events_carry_the_new_order(committed_client: TestClient) -> None:
         committed_client.delete(f"/lists/{first}")
         event = ws.receive_json()
         assert event["type"] == "list.deleted"
-        assert event["data"] == {"list_id": first, "list_ids": [third, second]}
+        assert event["data"] == {
+            "list_id": first,
+            "name": "A",
+            "list_ids": [third, second],
+        }
 
 
 def test_card_events_carry_the_new_order(committed_client: TestClient) -> None:
@@ -217,6 +226,7 @@ def test_card_events_carry_the_new_order(committed_client: TestClient) -> None:
         assert event["type"] == "card.deleted"
         assert event["data"] == {
             "card_id": y,
+            "title": "Y",
             "lists": [{"list_id": second, "card_ids": [z]}],
         }
 
@@ -294,7 +304,47 @@ def test_label_events(committed_client: TestClient) -> None:
         committed_client.delete(f"/labels/{label['id']}")
         event = ws.receive_json()
         assert event["type"] == "label.deleted"
-        assert event["data"] == {"label_id": label["id"]}
+        assert event["data"] == {"label_id": label["id"], "name": label["name"]}
+
+
+def test_comment_events(committed_client: TestClient) -> None:
+    board_id = make_board(committed_client)
+    card_id = make_card(
+        committed_client, make_list(committed_client, board_id, "A"), "C"
+    )
+
+    with watch(committed_client, board_id) as ws:
+        comment = committed_client.post(
+            f"/cards/{card_id}/comments", json={"body": "Hello"}
+        ).json()
+        event = ws.receive_json()
+        assert event["type"] == "comment.created"
+        assert event["data"]["comment"] == comment
+
+        committed_client.patch(f"/comments/{comment['id']}", json={"body": "Hi"})
+        event = ws.receive_json()
+        assert event["type"] == "comment.updated"
+        assert event["data"]["comment"]["body"] == "Hi"
+
+        committed_client.delete(f"/comments/{comment['id']}")
+        event = ws.receive_json()
+        assert event["type"] == "comment.deleted"
+        assert event["data"] == {"comment_id": comment["id"], "card_id": card_id}
+
+
+def test_events_carry_the_actor(committed_client: TestClient) -> None:
+    board_id = make_board(committed_client)
+    bob = share(committed_client, board_id, "editor")
+    bob_id = committed_client.get("/users/me", headers=bob).json()["id"]
+
+    with watch(committed_client, board_id) as ws:
+        make_list(committed_client, board_id, "Alice's")
+        assert ws.receive_json()["actor_id"] == alice_id(committed_client)
+
+        committed_client.post(
+            f"/boards/{board_id}/lists", json={"name": "Bob's"}, headers=bob
+        )
+        assert ws.receive_json()["actor_id"] == bob_id
 
 
 def test_archive_events(committed_client: TestClient) -> None:
