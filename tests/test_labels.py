@@ -28,6 +28,40 @@ def labels_of(client: TestClient, board_id: int) -> list[dict]:
     return response.json()
 
 
+# Default labels
+
+
+def test_new_board_has_six_unnamed_labels(client: TestClient) -> None:
+    board = create_board(client)
+
+    labels = labels_of(client, board["id"])
+
+    assert [(label["name"], label["color"]) for label in labels] == [
+        ("", "green"),
+        ("", "yellow"),
+        ("", "orange"),
+        ("", "red"),
+        ("", "purple"),
+        ("", "blue"),
+    ]
+    assert {label["board_id"] for label in labels} == {board["id"]}
+
+
+def test_default_labels_can_be_used_and_changed(client: TestClient) -> None:
+    board = create_board(client)
+    green = labels_of(client, board["id"])[0]
+    board_list = client.post(f"/boards/{board['id']}/lists", json={"name": "A"}).json()
+
+    card = client.post(
+        f"/lists/{board_list['id']}/cards",
+        json={"title": "C", "label_ids": [green["id"]]},
+    ).json()
+    renamed = client.patch(f"/labels/{green['id']}", json={"name": "Done"})
+
+    assert card["label_ids"] == [green["id"]]
+    assert renamed.json() == {**green, "name": "Done"}
+
+
 # Create and list
 
 
@@ -48,14 +82,28 @@ def test_create_label(client: TestClient) -> None:
     }
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [{"color": "red"}, {"name": "", "color": "red"}, {"name": "   ", "color": "red"}],
+)
+def test_create_label_without_a_name(client: TestClient, payload: dict) -> None:
+    board = create_board(client)
+
+    response = client.post(f"/boards/{board['id']}/labels", json=payload)
+
+    assert response.status_code == 201
+    assert response.json()["name"] == ""
+
+
 def test_list_labels_in_creation_order(client: TestClient) -> None:
     board = create_board(client)
+    defaults = labels_of(client, board["id"])
     bug = create_label(client, board["id"], "Bug", "red")
     feature = create_label(client, board["id"], "Feature", "green")
     # Names may repeat, like on Trello.
     again = create_label(client, board["id"], "Bug", "orange")
 
-    assert labels_of(client, board["id"]) == [bug, feature, again]
+    assert labels_of(client, board["id"]) == [*defaults, bug, feature, again]
 
 
 def test_labels_belong_to_their_board(client: TestClient) -> None:
@@ -63,27 +111,30 @@ def test_labels_belong_to_their_board(client: TestClient) -> None:
     second = create_board(client, "Second")
     create_label(client, first["id"])
 
-    assert labels_of(client, second["id"]) == []
+    labels = labels_of(client, second["id"])
+    assert len(labels) == 6
+    assert {label["board_id"] for label in labels} == {second["id"]}
 
 
 @pytest.mark.parametrize(
     "payload",
     [
         {"name": "Bug"},
-        {"color": "red"},
-        {"name": "", "color": "red"},
+        {},
         {"name": "x" * 101, "color": "red"},
         {"name": "Bug", "color": "pink"},
         {"name": "Bug", "color": "RED"},
+        {"name": "Bug", "color": None},
     ],
 )
 def test_create_label_invalid_payload(client: TestClient, payload: dict) -> None:
     board = create_board(client)
+    defaults = labels_of(client, board["id"])
 
     response = client.post(f"/boards/{board['id']}/labels", json=payload)
 
     assert response.status_code == 422
-    assert labels_of(client, board["id"]) == []
+    assert labels_of(client, board["id"]) == defaults
 
 
 def test_create_label_on_missing_board_returns_404(client: TestClient) -> None:
@@ -115,6 +166,8 @@ def test_get_missing_label_returns_404(client: TestClient) -> None:
         ({"name": "Defect"}, "Defect", "red"),
         ({"color": "purple"}, "Bug", "purple"),
         ({"name": "Defect", "color": "blue"}, "Defect", "blue"),
+        ({"name": ""}, "", "red"),
+        ({"name": "   "}, "", "red"),
     ],
 )
 def test_update_label(client: TestClient, payload: dict, name: str, color: str) -> None:
@@ -129,26 +182,28 @@ def test_update_label(client: TestClient, payload: dict, name: str, color: str) 
 
 @pytest.mark.parametrize(
     "payload",
-    [{}, {"name": None}, {"color": None}, {"name": ""}, {"color": "pink"}],
+    [{}, {"name": None}, {"color": None}, {"name": "x" * 101}, {"color": "pink"}],
 )
 def test_update_label_invalid_payload(client: TestClient, payload: dict) -> None:
     board = create_board(client)
     label = create_label(client, board["id"])
+    before = labels_of(client, board["id"])
 
     response = client.patch(f"/labels/{label['id']}", json=payload)
 
     assert response.status_code == 422
-    assert labels_of(client, board["id"]) == [label]
+    assert labels_of(client, board["id"]) == before
 
 
 def test_delete_label(client: TestClient) -> None:
     board = create_board(client)
+    defaults = labels_of(client, board["id"])
     bug = create_label(client, board["id"], "Bug")
     feature = create_label(client, board["id"], "Feature")
 
     assert client.delete(f"/labels/{bug['id']}").status_code == 204
 
-    assert labels_of(client, board["id"]) == [feature]
+    assert labels_of(client, board["id"]) == [*defaults, feature]
     assert client.get(f"/labels/{bug['id']}").status_code == 404
 
 
@@ -208,10 +263,11 @@ def test_other_users_label_returns_404(
 ) -> None:
     board = create_board(client)
     label = create_label(client, board["id"])
+    before = labels_of(client, board["id"])
 
     response = client.request(
         method, f"/labels/{label['id']}", json=json, headers=other_headers
     )
 
     assert response.status_code == 404
-    assert labels_of(client, board["id"]) == [label]
+    assert labels_of(client, board["id"]) == before

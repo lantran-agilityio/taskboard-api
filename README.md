@@ -30,7 +30,7 @@ Cards can have a due date, labels and assignees:
 
 - **`due_at`:** a date and time with a timezone, such as `2026-11-20T17:00:00+07:00`. The API answers in UTC (`2026-11-20T10:00:00Z`). A time without a timezone is rejected with 422.
 - **`due_complete`:** `true` once the card is done.
-- **`label_ids`:** labels from the card's board. A board's labels are managed at `/boards/{board_id}/labels` and `/labels/{label_id}`. Each label has a `name` and a `color` (`green`, `yellow`, `orange`, `red`, `purple` or `blue`).
+- **`label_ids`:** labels from the card's board. A board's labels are managed at `/boards/{board_id}/labels` and `/labels/{label_id}`. Each label has a `color` (`green`, `yellow`, `orange`, `red`, `purple` or `blue`) and a `name`, which may be empty (leave it out, or send `""`). Every new board starts with six unnamed labels, one per colour, so cards can be tagged straight away.
 - **`assignee_ids`:** user ids of the board's owner or members. Removing someone from a board also unassigns them from its cards.
 
 Set them when creating a card, or change them with `PATCH /cards/{card_id}`:
