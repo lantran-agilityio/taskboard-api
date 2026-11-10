@@ -24,6 +24,17 @@ uv run uvicorn app.main:app --reload
 
 Open http://127.0.0.1:8000/docs to try the API: register with `POST /auth/register`, then click **Authorize** and log in with your email and password.
 
+## Boards
+
+A board has a `name` and an optional `description` (up to 2000 characters). Set them when creating it, or change them with `PATCH /boards/{board_id}`:
+- `"description": null` clears it, and leaving a field out keeps it.
+- Editors and owners can change the description. Only the owner can rename the board.
+
+Anyone on a board can star it for themselves, viewers included:
+- `PUT /boards/{board_id}/star` stars it and `DELETE /boards/{board_id}/star` unstars it. Both answer 204 and are safe to repeat.
+- `GET /boards` and `GET /boards/{board_id}` show `"starred": true` or `false` for the user asking. Stars are private: nobody else sees yours, and starring isn't logged or sent over the WebSocket.
+- Leaving a board (or being removed from it) drops your star.
+
 ## Card details
 
 Cards can have a due date, labels and assignees:
@@ -103,7 +114,7 @@ Events look like `{"type": "card.updated", "board_id": 1, "actor_id": 2, "data":
 
 | type | data |
 |---|---|
-| `board.updated` | `board` |
+| `board.updated` | `board` (without `starred`, which is per user) |
 | `board.deleted` | `{}` (then the socket closes with 4404) |
 | `list.created`, `list.updated` | `list`, `list_ids` (the board's lists in their new order) |
 | `list.deleted` | `list_id`, `name`, `list_ids` |

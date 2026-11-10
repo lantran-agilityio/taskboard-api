@@ -6,13 +6,11 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    StringConstraints,
     model_validator,
 )
 
-from app.schemas.common import Name, UtcDatetime
+from app.schemas.common import Description, Name, UtcDatetime
 
-Description = Annotated[str, StringConstraints(max_length=2000)]
 # A set of ids sent as a list: repeats are dropped and the order is fixed.
 IdSet = Annotated[
     list[Annotated[int, Field(ge=1, strict=True)]],

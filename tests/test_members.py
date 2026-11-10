@@ -278,6 +278,20 @@ def test_member_leaves_the_board(client: TestClient, other_headers: dict) -> Non
     assert members(client, board["id"]) == [("alice@example.com", "owner")]
 
 
+def test_removed_member_loses_their_star(
+    client: TestClient, other_headers: dict
+) -> None:
+    board = create_board(client)
+    bob = share(client, board["id"], BOB, "viewer")
+    client.put(f"/boards/{board['id']}/star", headers=other_headers)
+    client.delete(f"/boards/{board['id']}/members/{bob['user_id']}")
+
+    share(client, board["id"], BOB, "viewer")
+
+    bobs = client.get(f"/boards/{board['id']}", headers=other_headers).json()
+    assert bobs["starred"] is False
+
+
 def test_member_cannot_remove_others(client: TestClient, other_headers: dict) -> None:
     board = create_board(client)
     share(client, board["id"], BOB, "editor")
@@ -436,6 +450,22 @@ ACTIONS: dict[str, tuple[Request, int, int]] = {
         lambda s: ("DELETE", f"/boards/{s['board']['id']}", None),
         403,
         403,
+    ),
+    "describe board": (
+        lambda s: ("PATCH", f"/boards/{s['board']['id']}", {"description": "New"}),
+        403,
+        200,
+    ),
+    # A star is Bob's own, so it changes nothing Alice sees.
+    "star board": (
+        lambda s: ("PUT", f"/boards/{s['board']['id']}/star", None),
+        204,
+        204,
+    ),
+    "unstar board": (
+        lambda s: ("DELETE", f"/boards/{s['board']['id']}/star", None),
+        204,
+        204,
     ),
     "read lists": (
         lambda s: ("GET", f"/boards/{s['board']['id']}/lists", None),

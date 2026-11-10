@@ -13,6 +13,7 @@ from app.realtime.events import EventType, publish
 from app.schemas.board_member import MemberCreate, MemberRead, MemberUpdate
 from app.services.card_details import unassign_from_board
 from app.services.permissions import board_role
+from app.services.stars import unstar
 
 router = APIRouter(prefix="/boards/{board_id}/members", tags=["members"])
 
@@ -109,6 +110,7 @@ def remove_member(
         )
     board.members.remove(find_member(board, user_id))  # delete-orphan deletes it
     unassign_from_board(db, board.id, user_id)
+    unstar(db, board.id, user_id)  # so a later re-invite starts unstarred
     db.flush()
     # Also closes that user's sockets on this board.
     publish(
