@@ -25,7 +25,7 @@ from app.models.user import User
 from app.realtime.events import EventType, card_order, publish
 from app.schemas.card import CardCreate, CardRead, CardUpdate
 from app.services.card_details import resolve_assignees, resolve_labels
-from app.services.ordering import move_item, remove_item, transfer_item
+from app.services.ordering import insert_item, move_item, remove_item, transfer_item
 
 # Cards are created and listed through their list...
 list_cards_router = APIRouter(prefix="/lists/{list_id}/cards", tags=["cards"])
@@ -233,6 +233,7 @@ def archive_card(
     if board_list.is_archived:
         raise validation_error("path", "card_id", "Card's list is archived", card.id)
     remove_item(board_list.active_cards, card)
+    card.archived_position = card.position
     card.position = None
     card.archived_at = datetime.now(UTC)
     db.flush()
@@ -253,8 +254,13 @@ def restore_card(
         raise validation_error(
             "path", "card_id", "Card's list is archived; restore it first", card.id
         )
-    card.position = len(board_list.active_cards)  # back at the end
+    active_cards = board_list.active_cards
+    # Back where it was, or at the end if the list has fewer cards now (or the
+    # card was archived before positions were saved).
+    position = card.archived_position
+    insert_item(active_cards, card, len(active_cards) if position is None else position)
     card.archived_at = None
+    card.archived_position = None
     db.flush()
     publish_card(db, EventType.CARD_RESTORED, card, [board_list], user.id)
     db.commit()

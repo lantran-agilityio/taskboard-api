@@ -22,6 +22,7 @@ class EventType(StrEnum):
     LIST_DELETED = "list.deleted"
     LIST_ARCHIVED = "list.archived"
     LIST_RESTORED = "list.restored"
+    LIST_SORTED = "list.sorted"
     CARD_CREATED = "card.created"
     CARD_UPDATED = "card.updated"
     CARD_DELETED = "card.deleted"

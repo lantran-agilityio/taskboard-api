@@ -391,7 +391,8 @@ def test_archive_events(committed_client: TestClient) -> None:
         committed_client.post(f"/cards/{x}/restore")
         event = ws.receive_json()
         assert event["type"] == "card.restored"
-        assert event["data"]["lists"] == [{"list_id": first, "card_ids": [y, x]}]
+        # Back where it was.
+        assert event["data"]["lists"] == [{"list_id": first, "card_ids": [x, y]}]
 
         committed_client.post(f"/lists/{first}/archive")
         event = ws.receive_json()
@@ -402,8 +403,25 @@ def test_archive_events(committed_client: TestClient) -> None:
         committed_client.post(f"/lists/{first}/restore")
         event = ws.receive_json()
         assert event["type"] == "list.restored"
-        assert event["data"]["list"]["position"] == 1
-        assert event["data"]["list_ids"] == [second, first]
+        assert event["data"]["list"]["position"] == 0
+        assert event["data"]["list_ids"] == [first, second]
+
+
+def test_sort_event(committed_client: TestClient) -> None:
+    board_id = make_board(committed_client)
+    list_id = make_list(committed_client, board_id, "A")
+    b = make_card(committed_client, list_id, "b")
+    a = make_card(committed_client, list_id, "a")
+
+    with watch(committed_client, board_id) as ws:
+        committed_client.post(f"/lists/{list_id}/sort", json={"by": "title"})
+        event = ws.receive_json()
+
+    # One event for the whole sort, not one per card.
+    assert event["type"] == "list.sorted"
+    assert event["data"]["list"]["id"] == list_id
+    assert event["data"]["by"] == "title"
+    assert event["data"]["lists"] == [{"list_id": list_id, "card_ids": [a, b]}]
 
 
 def test_failed_request_sends_no_event(committed_client: TestClient) -> None:

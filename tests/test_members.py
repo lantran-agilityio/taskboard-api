@@ -494,6 +494,11 @@ ACTIONS: dict[str, tuple[Request, int, int]] = {
         403,
         200,
     ),
+    "sort list": (
+        lambda s: ("POST", f"/lists/{s['lists']['A']['id']}/sort", {"by": "title"}),
+        403,
+        200,
+    ),
     "delete list": (
         lambda s: ("DELETE", f"/lists/{s['lists']['B']['id']}", None),
         403,

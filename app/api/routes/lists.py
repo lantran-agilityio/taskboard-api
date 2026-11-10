@@ -1,6 +1,6 @@
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
@@ -10,9 +10,11 @@ from app.api.deps import CurrentUser
 from app.api.errors import body_validation_error, validation_error
 from app.core.database import get_db
 from app.models.board_list import BoardList
-from app.realtime.events import EventType, list_order, publish
-from app.schemas.board_list import ListCreate, ListRead, ListUpdate
-from app.services.ordering import move_item, remove_item
+from app.models.card import Card
+from app.realtime.events import EventType, card_order, list_order, publish
+from app.schemas.board_list import ListCreate, ListRead, ListSort, ListUpdate, SortBy
+from app.schemas.card import CardRead
+from app.services.ordering import insert_item, move_item, remove_item, sort_items
 
 # Lists are created and listed through their board...
 board_lists_router = APIRouter(prefix="/boards/{board_id}/lists", tags=["lists"])
@@ -103,6 +105,7 @@ def archive_list(
 ) -> BoardList:
     check_archived(board_list, False, "List is already archived")
     remove_item(board_list.board.active_lists, board_list)
+    board_list.archived_position = board_list.position
     board_list.position = None
     board_list.archived_at = datetime.now(UTC)
     db.flush()
@@ -117,13 +120,54 @@ def restore_list(
     board_list: EditableList, user: CurrentUser, db: Session = Depends(get_db)
 ) -> BoardList:
     check_archived(board_list, True, "List is not archived")
-    board_list.position = len(board_list.board.active_lists)  # back at the end
+    active_lists = board_list.board.active_lists
+    # Back where it was, or at the end if the board has fewer lists now. Lists
+    # archived before positions were saved have none, so they go at the end.
+    position = board_list.archived_position
+    insert_item(
+        active_lists, board_list, len(active_lists) if position is None else position
+    )
     board_list.archived_at = None
+    board_list.archived_position = None
     db.flush()
     publish_list(db, EventType.LIST_RESTORED, board_list, user.id)
     db.commit()
     db.refresh(board_list)
     return board_list
+
+
+SORT_KEYS: dict[SortBy, Callable[[Card], Any]] = {
+    # Ties (same time or title) fall back to the id, so a sort is repeatable.
+    SortBy.CREATED_DESC: lambda card: (-card.created_at.timestamp(), -card.id),
+    SortBy.CREATED_ASC: lambda card: (card.created_at, card.id),
+    SortBy.TITLE: lambda card: (card.title.casefold(), card.id),
+}
+
+
+@router.post("/{list_id}/sort", response_model=list[CardRead])
+def sort_list(
+    payload: ListSort,
+    board_list: EditableList,
+    user: CurrentUser,
+    db: Session = Depends(get_db),
+) -> list[Card]:
+    """Reorder the list's cards once; cards added later still go at the end."""
+    check_archived(board_list, False, "List is archived; restore it first")
+    sort_items(board_list.active_cards, SORT_KEYS[payload.by])
+    db.flush()
+    publish(
+        db,
+        board_list.board_id,
+        EventType.LIST_SORTED,
+        {
+            "list": ListRead.model_validate(board_list).model_dump(mode="json"),
+            "by": payload.by,
+            "lists": [card_order(board_list)],
+        },
+        actor_id=user.id,
+    )
+    db.commit()
+    return board_list.active_cards
 
 
 @router.delete("/{list_id}", status_code=status.HTTP_204_NO_CONTENT)

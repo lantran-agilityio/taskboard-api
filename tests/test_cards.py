@@ -865,15 +865,40 @@ def test_archived_card_keeps_its_details(client: TestClient) -> None:
     assert restored == {**card, "archived_at": None}
 
 
-def test_restore_card_puts_it_at_the_end(client: TestClient) -> None:
+def test_restore_card_puts_it_back_where_it_was(client: TestClient) -> None:
     list_id, cards = list_with_cards(client, "A", "B", "C")
     card_action(client, cards["A"]["id"])
 
     body = card_action(client, cards["A"]["id"], "restore")
 
-    assert body["position"] == 2
-    assert card_titles(client, list_id) == ["B", "C", "A"]
+    assert body["position"] == 0
+    assert card_titles(client, list_id) == ["A", "B", "C"]
     assert archived_titles(client, list_id) == []
+
+
+def test_restore_card_after_others_changed(client: TestClient) -> None:
+    list_id, cards = list_with_cards(client, "A", "B", "C", "D")
+    card_action(client, cards["B"]["id"])  # was at 1
+    client.patch(f"/cards/{cards['D']['id']}", json={"position": 0})  # D A C
+    create_card(client, list_id, "E")  # D A C E
+
+    card_action(client, cards["B"]["id"], "restore")
+
+    assert card_titles(client, list_id) == ["D", "B", "A", "C", "E"]
+
+
+def test_restore_card_goes_at_the_end_if_the_list_got_shorter(
+    client: TestClient,
+) -> None:
+    list_id, cards = list_with_cards(client, "A", "B", "C")
+    card_action(client, cards["C"]["id"])  # was at 2
+    client.delete(f"/cards/{cards['A']['id']}")
+    client.delete(f"/cards/{cards['B']['id']}")
+
+    body = card_action(client, cards["C"]["id"], "restore")
+
+    assert body["position"] == 0
+    assert card_titles(client, list_id) == ["C"]
 
 
 def test_new_card_after_archive_goes_to_the_end(client: TestClient) -> None:

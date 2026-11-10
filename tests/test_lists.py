@@ -375,16 +375,67 @@ def test_archived_lists_newest_first(client: TestClient) -> None:
     assert list_names(client, board_id) == []
 
 
-def test_restore_list_puts_it_at_the_end(client: TestClient) -> None:
+def test_restore_list_puts_it_back_where_it_was(client: TestClient) -> None:
     board_id, lists = board_with_lists(client, "A", "B", "C")
-    archive(client, lists["A"]["id"])
+    archive(client, lists["B"]["id"])
 
-    body = archive(client, lists["A"]["id"], "restore")
+    body = archive(client, lists["B"]["id"], "restore")
 
     assert body["archived_at"] is None
-    assert body["position"] == 2
-    assert list_names(client, board_id) == ["B", "C", "A"]
+    assert body["position"] == 1
+    assert list_names(client, board_id) == ["A", "B", "C"]
     assert archived_names(client, board_id) == []
+
+
+def test_restored_list_keeps_its_cards_in_order(client: TestClient) -> None:
+    _, lists = board_with_lists(client, "A")
+    list_id = lists["A"]["id"]
+    for title in ["X", "Y", "Z"]:
+        client.post(f"/lists/{list_id}/cards", json={"title": title})
+    archive(client, list_id)
+    archive(client, list_id, "restore")
+
+    cards = client.get(f"/lists/{list_id}/cards").json()
+    assert [(card["title"], card["position"]) for card in cards] == [
+        ("X", 0),
+        ("Y", 1),
+        ("Z", 2),
+    ]
+
+
+def test_restore_list_after_others_moved(client: TestClient) -> None:
+    board_id, lists = board_with_lists(client, "A", "B", "C", "D")
+    archive(client, lists["C"]["id"])  # was at 2
+    client.patch(f"/lists/{lists['D']['id']}", json={"position": 0})  # D A B
+
+    archive(client, lists["C"]["id"], "restore")
+
+    # Same position number, among whatever is there now.
+    assert list_names(client, board_id) == ["D", "A", "C", "B"]
+
+
+def test_restore_list_goes_at_the_end_if_the_board_got_shorter(
+    client: TestClient,
+) -> None:
+    board_id, lists = board_with_lists(client, "A", "B", "C")
+    archive(client, lists["C"]["id"])  # was at 2
+    client.delete(f"/lists/{lists['A']['id']}")
+
+    body = archive(client, lists["C"]["id"], "restore")
+
+    assert body["position"] == 1
+    assert list_names(client, board_id) == ["B", "C"]
+
+
+def test_restore_lists_in_any_order(client: TestClient) -> None:
+    board_id, lists = board_with_lists(client, "A", "B", "C")
+    archive(client, lists["A"]["id"])  # was at 0
+    archive(client, lists["C"]["id"])  # was at 1, after A left
+
+    archive(client, lists["C"]["id"], "restore")
+    archive(client, lists["A"]["id"], "restore")
+
+    assert list_names(client, board_id) == ["A", "B", "C"]
 
 
 def test_new_list_after_archive_goes_to_the_end(client: TestClient) -> None:
@@ -461,3 +512,122 @@ def test_other_users_list_archive_returns_404(
     response = client.post(f"/lists/{lists['A']['id']}/{action}", headers=other_headers)
 
     assert response.status_code == 404
+
+
+# Sort a list's cards once
+
+
+def list_of_cards(client: TestClient, *titles: str) -> tuple[int, dict]:
+    _, lists = board_with_lists(client, "A")
+    list_id = lists["A"]["id"]
+    cards = {
+        title: client.post(f"/lists/{list_id}/cards", json={"title": title}).json()
+        for title in titles
+    }
+    return list_id, cards
+
+
+def titles(client: TestClient, list_id: int) -> list[str]:
+    return [card["title"] for card in client.get(f"/lists/{list_id}/cards").json()]
+
+
+@pytest.mark.parametrize(
+    ("by", "expected"),
+    [
+        ("created_asc", ["banana", "Apple", "cherry"]),
+        ("created_desc", ["cherry", "Apple", "banana"]),
+        # Ignoring case.
+        ("title", ["Apple", "banana", "cherry"]),
+    ],
+)
+def test_sort_list(client: TestClient, by: str, expected: list[str]) -> None:
+    list_id, cards = list_of_cards(client, "banana", "Apple", "cherry")
+    # Shuffle first, so creation order isn't the current order.
+    client.patch(f"/cards/{cards['cherry']['id']}", json={"position": 0})
+
+    response = client.post(f"/lists/{list_id}/sort", json={"by": by})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [card["title"] for card in body] == expected
+    assert [card["position"] for card in body] == [0, 1, 2]
+    assert titles(client, list_id) == expected
+
+
+def test_sort_is_once(client: TestClient) -> None:
+    list_id, _ = list_of_cards(client, "b", "a")
+    client.post(f"/lists/{list_id}/sort", json={"by": "title"})
+
+    client.post(f"/lists/{list_id}/cards", json={"title": "0"})
+
+    # A new card still goes at the end.
+    assert titles(client, list_id) == ["a", "b", "0"]
+
+
+def test_sort_title_ties_keep_creation_order(client: TestClient) -> None:
+    list_id, cards = list_of_cards(client, "Same", "same", "A")
+
+    body = client.post(f"/lists/{list_id}/sort", json={"by": "title"}).json()
+
+    assert [card["id"] for card in body] == [
+        cards["A"]["id"],
+        cards["Same"]["id"],
+        cards["same"]["id"],
+    ]
+
+
+def test_sort_leaves_archived_cards_out(client: TestClient) -> None:
+    list_id, cards = list_of_cards(client, "c", "b", "a")
+    client.post(f"/cards/{cards['b']['id']}/archive")
+
+    body = client.post(f"/lists/{list_id}/sort", json={"by": "title"}).json()
+
+    assert [card["title"] for card in body] == ["a", "c"]
+    archived = client.get(f"/lists/{list_id}/cards", params={"archived": True}).json()
+    assert [(card["title"], card["position"]) for card in archived] == [("b", None)]
+
+
+def test_sort_empty_list(client: TestClient) -> None:
+    list_id, _ = list_of_cards(client)
+
+    response = client.post(f"/lists/{list_id}/sort", json={"by": "title"})
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+@pytest.mark.parametrize("payload", [{}, {"by": "name"}, {"by": "TITLE"}, {"by": None}])
+def test_sort_invalid_payload(client: TestClient, payload: dict) -> None:
+    list_id, _ = list_of_cards(client, "b", "a")
+
+    response = client.post(f"/lists/{list_id}/sort", json=payload)
+
+    assert response.status_code == 422
+    assert titles(client, list_id) == ["b", "a"]
+
+
+def test_sort_archived_list_returns_422(client: TestClient) -> None:
+    list_id, _ = list_of_cards(client, "b", "a")
+    archive(client, list_id)
+
+    response = client.post(f"/lists/{list_id}/sort", json={"by": "title"})
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["msg"] == "List is archived; restore it first"
+
+
+def test_sort_missing_list_returns_404(client: TestClient) -> None:
+    assert client.post("/lists/999/sort", json={"by": "title"}).status_code == 404
+
+
+def test_sort_other_users_list_returns_404(
+    client: TestClient, other_headers: dict
+) -> None:
+    list_id, _ = list_of_cards(client, "b", "a")
+
+    response = client.post(
+        f"/lists/{list_id}/sort", json={"by": "title"}, headers=other_headers
+    )
+
+    assert response.status_code == 404
+    assert titles(client, list_id) == ["b", "a"]
