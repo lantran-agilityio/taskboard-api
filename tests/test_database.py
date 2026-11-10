@@ -61,8 +61,11 @@ def test_requests_succeed_after_pooled_connections_die(
         pids = list(
             connection.execute(
                 text(
+                    # Client connections only: background processes such as
+                    # autovacuum workers also show this database's name.
                     "SELECT pid FROM pg_stat_activity "
                     "WHERE datname = current_database() "
+                    "AND backend_type = 'client backend' "
                     "AND pid NOT IN (pg_backend_pid(), :listener)"
                 ),
                 {"listener": listener},
