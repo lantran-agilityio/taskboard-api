@@ -151,10 +151,16 @@ def test_board_events(committed_client: TestClient) -> None:
     board_id = make_board(committed_client)
 
     with watch(committed_client, board_id) as ws:
-        committed_client.patch(f"/boards/{board_id}", json={"name": "Renamed"})
+        # Stars are per user: starring sends nothing, so the next event is the rename.
+        committed_client.put(f"/boards/{board_id}/star")
+        committed_client.patch(
+            f"/boards/{board_id}", json={"name": "Renamed", "description": "About"}
+        )
         event = ws.receive_json()
         assert event["type"] == "board.updated"
-        assert event["data"]["board"]["name"] == "Renamed"
+        board = event["data"]["board"]
+        assert (board["name"], board["description"]) == ("Renamed", "About")
+        assert "starred" not in board
 
         committed_client.delete(f"/boards/{board_id}")
         assert ws.receive_json() == {

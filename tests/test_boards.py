@@ -16,9 +16,13 @@ def test_create_board(client: TestClient) -> None:
 
     assert response.status_code == 201
     body = response.json()
-    assert body["name"] == "Project X"
-    assert isinstance(body["id"], int)
-    assert "created_at" in body
+    assert body == {
+        "id": body["id"],
+        "name": "Project X",
+        "description": None,
+        "created_at": body["created_at"],
+        "starred": False,
+    }
 
 
 def test_create_board_strips_whitespace(client: TestClient) -> None:
@@ -35,6 +39,23 @@ def test_create_board_invalid_name(client: TestClient, payload: dict) -> None:
     response = client.post("/boards", json=payload)
 
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize("description", ["", "What this board is for", "x" * 2000])
+def test_create_board_with_description(client: TestClient, description: str) -> None:
+    response = client.post(
+        "/boards", json={"name": "Project X", "description": description}
+    )
+
+    assert response.status_code == 201
+    assert response.json()["description"] == description
+
+
+def test_create_board_description_too_long(client: TestClient) -> None:
+    response = client.post("/boards", json={"name": "X", "description": "x" * 2001})
+
+    assert response.status_code == 422
+    assert client.get("/boards").json() == []
 
 
 # List
@@ -96,6 +117,45 @@ def test_rename_board(client: TestClient) -> None:
     assert client.get(f"/boards/{board['id']}").json()["name"] == "New name"
 
 
+@pytest.mark.parametrize(
+    ("payload", "name", "description"),
+    [
+        ({"description": "New"}, "Old name", "New"),
+        ({"description": None}, "Old name", None),
+        ({"description": ""}, "Old name", ""),
+        ({"name": "New name", "description": "New"}, "New name", "New"),
+        # Leaving description out keeps it.
+        ({"name": "New name"}, "New name", "About"),
+    ],
+)
+def test_update_board(
+    client: TestClient, payload: dict, name: str, description: str | None
+) -> None:
+    board = client.post(
+        "/boards", json={"name": "Old name", "description": "About"}
+    ).json()
+
+    response = client.patch(f"/boards/{board['id']}", json=payload)
+
+    assert response.status_code == 200
+    expected = {**board, "name": name, "description": description}
+    assert response.json() == expected
+    assert client.get(f"/boards/{board['id']}").json() == expected
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [{}, {"name": None}, {"name": ""}, {"description": "x" * 2001}],
+)
+def test_update_board_invalid_payload(client: TestClient, payload: dict) -> None:
+    board = client.post("/boards", json={"name": "Old", "description": "About"}).json()
+
+    response = client.patch(f"/boards/{board['id']}", json=payload)
+
+    assert response.status_code == 422
+    assert client.get(f"/boards/{board['id']}").json() == board
+
+
 def test_rename_missing_board_returns_404(client: TestClient) -> None:
     response = client.patch("/boards/999", json={"name": "New name"})
 
@@ -131,6 +191,80 @@ def test_delete_missing_board_returns_404(client: TestClient) -> None:
     assert response.status_code == 404
 
 
+# Stars
+
+
+def test_star_and_unstar_board(client: TestClient) -> None:
+    board = create_board(client)
+    path = f"/boards/{board['id']}/star"
+
+    starred = client.put(path)
+    # Starring twice is fine, like unstarring a board that isn't starred.
+    again = client.put(path)
+
+    assert (starred.status_code, again.status_code) == (204, 204)
+    assert starred.content == b""
+    assert client.get(f"/boards/{board['id']}").json()["starred"] is True
+    assert [item["starred"] for item in client.get("/boards").json()] == [True]
+
+    assert client.delete(path).status_code == 204
+    assert client.delete(path).status_code == 204
+    assert client.get(f"/boards/{board['id']}").json() == board
+
+
+def test_list_boards_shows_which_are_starred(client: TestClient) -> None:
+    first = create_board(client, "First")
+    second = create_board(client, "Second")
+    create_board(client, "Third")
+    client.put(f"/boards/{first['id']}/star")
+    client.put(f"/boards/{second['id']}/star")
+    client.delete(f"/boards/{second['id']}/star")
+
+    boards = client.get("/boards").json()
+
+    assert [(item["name"], item["starred"]) for item in boards] == [
+        ("First", True),
+        ("Second", False),
+        ("Third", False),
+    ]
+
+
+def test_stars_are_per_user(client: TestClient, other_headers: dict) -> None:
+    board = create_board(client)
+    client.post(
+        f"/boards/{board['id']}/members",
+        json={"email": "bob@example.com", "role": "viewer"},
+    )
+
+    client.put(f"/boards/{board['id']}/star", headers=other_headers)
+
+    assert client.get(f"/boards/{board['id']}").json()["starred"] is False
+    bobs = client.get(f"/boards/{board['id']}", headers=other_headers).json()
+    assert bobs["starred"] is True
+
+
+def test_starring_is_not_logged(client: TestClient) -> None:
+    board = create_board(client)
+
+    client.put(f"/boards/{board['id']}/star")
+    client.delete(f"/boards/{board['id']}/star")
+
+    assert client.get(f"/boards/{board['id']}/activity").json()["items"] == []
+
+
+def test_star_missing_board_returns_404(client: TestClient) -> None:
+    assert client.put("/boards/999/star").status_code == 404
+    assert client.delete("/boards/999/star").status_code == 404
+
+
+def test_delete_starred_board(client: TestClient) -> None:
+    board = create_board(client)
+    client.put(f"/boards/{board['id']}/star")
+
+    assert client.delete(f"/boards/{board['id']}").status_code == 204
+    assert client.get("/boards").json() == []
+
+
 # Ownership
 
 
@@ -146,16 +280,27 @@ def test_list_boards_only_returns_your_own(
 
 
 @pytest.mark.parametrize(
-    ("method", "json"),
-    [("GET", None), ("PATCH", {"name": "Hacked"}), ("DELETE", None)],
+    ("method", "suffix", "json"),
+    [
+        ("GET", "", None),
+        ("PATCH", "", {"name": "Hacked"}),
+        ("PATCH", "", {"description": "Hacked"}),
+        ("DELETE", "", None),
+        ("PUT", "/star", None),
+        ("DELETE", "/star", None),
+    ],
 )
 def test_other_users_board_returns_404(
-    client: TestClient, other_headers: dict, method: str, json: dict | None
+    client: TestClient,
+    other_headers: dict,
+    method: str,
+    suffix: str,
+    json: dict | None,
 ) -> None:
     board = create_board(client)
 
     response = client.request(
-        method, f"/boards/{board['id']}", json=json, headers=other_headers
+        method, f"/boards/{board['id']}{suffix}", json=json, headers=other_headers
     )
 
     assert response.status_code == 404
