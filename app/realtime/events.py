@@ -15,6 +15,8 @@ CHANNEL = "board_events"
 class EventType(StrEnum):
     BOARD_UPDATED = "board.updated"
     BOARD_DELETED = "board.deleted"
+    BOARD_CLOSED = "board.closed"
+    BOARD_REOPENED = "board.reopened"
     LIST_CREATED = "list.created"
     LIST_UPDATED = "list.updated"
     LIST_DELETED = "list.deleted"

@@ -24,6 +24,8 @@ class Board(Base):
     name: Mapped[str] = mapped_column(String(100))
     description: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
+    # Set while the board is closed (read-only, off the home screen).
+    closed_at: Mapped[datetime | None]
 
     owner: Mapped["User"] = relationship(back_populates="boards")
     lists: Mapped[list["BoardList"]] = relationship(

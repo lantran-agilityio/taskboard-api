@@ -108,6 +108,9 @@ def remove_member(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Requires the owner role"
         )
+    # A closed board is read-only, but anyone can still leave it.
+    if board.closed_at is not None and user_id != user.id:
+        raise validation_error("path", "board_id", "Board is closed", board.id)
     board.members.remove(find_member(board, user_id))  # delete-orphan deletes it
     unassign_from_board(db, board.id, user_id)
     unstar(db, board.id, user_id)  # so a later re-invite starts unstarred

@@ -172,6 +172,26 @@ def test_board_events(committed_client: TestClient) -> None:
         assert close_code(ws) == 4404
 
 
+def test_close_and_reopen_events(committed_client: TestClient) -> None:
+    board_id = make_board(committed_client)
+
+    with watch(committed_client, board_id) as ws:
+        committed_client.post(f"/boards/{board_id}/close")
+        event = ws.receive_json()
+        assert event["type"] == "board.closed"
+        assert event["data"]["board"]["closed_at"] is not None
+        assert "starred" not in event["data"]["board"]
+
+        # The socket stays open: a closed board can still be watched.
+        ws.send_json({"type": "ping"})
+        assert ws.receive_json() == {"type": "pong"}
+
+        committed_client.post(f"/boards/{board_id}/reopen")
+        event = ws.receive_json()
+        assert event["type"] == "board.reopened"
+        assert event["data"]["board"]["closed_at"] is None
+
+
 def test_list_events_carry_the_new_order(committed_client: TestClient) -> None:
     board_id = make_board(committed_client)
     first = make_list(committed_client, board_id, "A")

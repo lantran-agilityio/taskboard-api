@@ -451,6 +451,17 @@ ACTIONS: dict[str, tuple[Request, int, int]] = {
         403,
         403,
     ),
+    "close board": (
+        lambda s: ("POST", f"/boards/{s['board']['id']}/close", None),
+        403,
+        403,
+    ),
+    # The board is open, but the role check comes first.
+    "reopen board": (
+        lambda s: ("POST", f"/boards/{s['board']['id']}/reopen", None),
+        403,
+        403,
+    ),
     "describe board": (
         lambda s: ("PATCH", f"/boards/{s['board']['id']}", {"description": "New"}),
         403,

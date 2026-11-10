@@ -7,6 +7,9 @@ Write access (editor or owner) also locks the board row until the request
 commits, so requests that reorder the same board's lists or cards take turns.
 The lock is taken before the list or card is loaded, so everything the route
 reads comes after the previous request's commit.
+
+A closed board is read-only: write access to it, or to anything on it, is a 422,
+except for the few routes that use `OwnedBoardAnyState` (close, reopen, delete).
 """
 
 from collections.abc import Callable
@@ -17,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentUser
+from app.api.errors import validation_error
 from app.core.database import get_db
 from app.models.board import Board
 from app.models.board_list import BoardList
@@ -28,7 +32,12 @@ from app.services.permissions import allows, board_role
 
 
 def load_board(
-    db: Session, board_id: int | None, user_id: int, minimum: BoardRole, missing: str
+    db: Session,
+    board_id: int | None,
+    user_id: int,
+    minimum: BoardRole,
+    missing: str,
+    allow_closed: bool = False,
 ) -> Board:
     """The board, checked for the user's role and locked for writes."""
     if board_id is None:
@@ -49,14 +58,21 @@ def load_board(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Requires the {minimum} role",
         )
+    # After the role check, so outsiders still get 404 and viewers 403.
+    if minimum is not BoardRole.VIEWER and board.closed_at and not allow_closed:
+        raise validation_error("path", "board_id", "Board is closed", board.id)
     return board
 
 
-def board_access(minimum: BoardRole) -> Callable[..., Board]:
+def board_access(
+    minimum: BoardRole, allow_closed: bool = False
+) -> Callable[..., Board]:
     def dependency(
         board_id: int, user: CurrentUser, db: Session = Depends(get_db)
     ) -> Board:
-        return load_board(db, board_id, user.id, minimum, "Board not found")
+        return load_board(
+            db, board_id, user.id, minimum, "Board not found", allow_closed
+        )
 
     return dependency
 
@@ -128,6 +144,10 @@ def comment_access(minimum: BoardRole) -> Callable[..., Comment]:
 ViewableBoard = Annotated[Board, Depends(board_access(BoardRole.VIEWER))]
 EditableBoard = Annotated[Board, Depends(board_access(BoardRole.EDITOR))]
 OwnedBoard = Annotated[Board, Depends(board_access(BoardRole.OWNER))]
+# Open or closed: for closing, reopening and deleting the board itself.
+OwnedBoardAnyState = Annotated[
+    Board, Depends(board_access(BoardRole.OWNER, allow_closed=True))
+]
 ViewableList = Annotated[BoardList, Depends(list_access(BoardRole.VIEWER))]
 EditableList = Annotated[BoardList, Depends(list_access(BoardRole.EDITOR))]
 ViewableCard = Annotated[Card, Depends(card_access(BoardRole.VIEWER))]
