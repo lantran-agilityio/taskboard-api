@@ -31,6 +31,8 @@ class BoardList(Base):
     position: Mapped[int | None]
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
     archived_at: Mapped[datetime | None]
+    # Where it was when archived, so restoring puts it back there.
+    archived_position: Mapped[int | None]
 
     board: Mapped["Board"] = relationship(back_populates="lists")
     cards: Mapped[list["Card"]] = relationship(

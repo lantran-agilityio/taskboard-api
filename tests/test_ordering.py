@@ -2,7 +2,14 @@ from dataclasses import dataclass
 
 import pytest
 
-from app.services.ordering import move_item, remove_item, renumber, transfer_item
+from app.services.ordering import (
+    insert_item,
+    move_item,
+    remove_item,
+    renumber,
+    sort_items,
+    transfer_item,
+)
 
 
 @dataclass
@@ -146,3 +153,38 @@ def test_remove_item_renumbers_the_rest() -> None:
 def test_remove_item_not_in_sequence() -> None:
     with pytest.raises(ValueError, match="not in this sequence"):
         remove_item(make_items("A"), Item("X", 0))
+
+
+@pytest.mark.parametrize(
+    ("position", "expected"),
+    [
+        (0, ["X", "A", "B"]),
+        (1, ["A", "X", "B"]),
+        (2, ["A", "B", "X"]),
+        (9, ["A", "B", "X"]),
+    ],
+)
+def test_insert_item(position: int, expected: list[str]) -> None:
+    items = make_items("A", "B")
+    item = Item("X", -1)
+
+    insert_item(items, item, position)
+
+    assert names_in_order([*items, item]) == expected
+    assert sorted(other.position for other in [*items, item]) == [0, 1, 2]
+
+
+def test_insert_item_already_there_raises() -> None:
+    items = make_items("A", "B")
+
+    with pytest.raises(ValueError):
+        insert_item(items, items[0], 1)
+
+
+def test_sort_items() -> None:
+    items = make_items("c", "A", "b")
+
+    sort_items(items, key=lambda item: item.name.casefold())
+
+    assert names_in_order(items) == ["A", "b", "c"]
+    assert sorted(item.position for item in items) == [0, 1, 2]

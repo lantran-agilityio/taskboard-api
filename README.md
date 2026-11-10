@@ -66,6 +66,10 @@ curl -H "Authorization: Bearer $TOKEN" \
   "http://127.0.0.1:8000/boards/1/cards?assignee_id=2&due_before=2026-11-21T00:00:00Z"
 ```
 
+## Sort a list
+
+`POST /lists/{list_id}/sort` with `{"by": "created_desc"}` (newest first), `"created_asc"` (oldest first) or `"title"` (A to Z, ignoring case) reorders the list's cards once and returns them in their new order. Cards added afterwards still go at the end. Ties keep creation order, archived cards aren't touched, and an archived list is a 422. Editors and owners can sort.
+
 ## Archive
 
 Archive a list or card to take it off the board without losing it, and restore it later:
@@ -74,7 +78,7 @@ Archive a list or card to take it off the board without losing it, and restore i
 
 An archived item keeps everything: its name, its cards (for a list), and its labels, assignees and due date (for a card).
 - **While archived:** its `archived_at` is set and its `position` is `null`, and the other items close the gap.
-- **On restore:** it goes back to the end of its board or list.
+- **On restore:** it goes back to the position it had when it was archived, among whatever is there now. If the board or list has fewer items than that, it goes at the end.
 - **Errors:** archiving something already archived, or restoring something that isn't, is a 422.
 
 While a list is archived, its cards are frozen with it:
@@ -126,6 +130,7 @@ Events look like `{"type": "card.updated", "board_id": 1, "actor_id": 2, "data":
 | `list.created`, `list.updated` | `list`, `list_ids` (the board's lists in their new order) |
 | `list.deleted` | `list_id`, `name`, `list_ids` |
 | `list.archived`, `list.restored` | `list`, `list_ids` (an archived list is gone from `list_ids`, like a deleted one) |
+| `list.sorted` | `list`, `by`, `lists: [{list_id, card_ids}]` (the cards' new order) |
 | `card.created`, `card.updated` | `card`, `lists: [{list_id, card_ids}]` (each affected list in its new order; both lists for a move between lists) |
 | `card.deleted` | `card_id`, `title`, `lists` |
 | `card.archived`, `card.restored` | `card`, `lists` |

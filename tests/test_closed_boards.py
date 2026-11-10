@@ -188,6 +188,11 @@ WRITES: dict[str, Request] = {
         f"/lists/{s['lists']['A']['id']}",
         {"name": "N"},
     ),
+    "sort list": lambda s: (
+        "POST",
+        f"/lists/{s['lists']['A']['id']}/sort",
+        {"by": "title"},
+    ),
     "delete list": lambda s: ("DELETE", f"/lists/{s['lists']['B']['id']}", None),
     "archive list": lambda s: ("POST", f"/lists/{s['lists']['B']['id']}/archive", None),
     "create card": lambda s: (

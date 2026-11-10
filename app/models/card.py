@@ -42,6 +42,8 @@ class Card(Base):
     # server_default fills in the cards that existed before the column did.
     due_complete: Mapped[bool] = mapped_column(default=False, server_default=false())
     archived_at: Mapped[datetime | None]
+    # Where it was when archived, so restoring puts it back there.
+    archived_position: Mapped[int | None]
 
     board_list: Mapped["BoardList"] = relationship(back_populates="cards")
     labels: Mapped[list["Label"]] = relationship(
