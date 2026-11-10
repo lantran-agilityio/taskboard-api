@@ -21,6 +21,7 @@ def test_create_board(client: TestClient) -> None:
         "name": "Project X",
         "description": None,
         "created_at": body["created_at"],
+        "closed_at": None,
         "starred": False,
     }
 

@@ -35,6 +35,12 @@ Anyone on a board can star it for themselves, viewers included:
 - `GET /boards` and `GET /boards/{board_id}` show `"starred": true` or `false` for the user asking. Stars are private: nobody else sees yours, and starring isn't logged or sent over the WebSocket.
 - Leaving a board (or being removed from it) drops your star.
 
+The owner can close a board to put it away, and reopen it later:
+- `POST /boards/{board_id}/close` and `POST /boards/{board_id}/reopen` return the board, with `closed_at` set while it's closed. Closing a closed board, or reopening an open one, is a 422.
+- A closed board is read-only for everyone. Everything on it can still be read, but every change (to the board, its lists, cards, labels, comments or members) is a 422 until it's reopened. Members can still leave it, star it and watch it over the WebSocket.
+- `GET /boards` lists open boards only. Add `?closed=true` to get the closed ones instead, most recently closed first.
+- `DELETE /boards/{board_id}` works whether the board is open or closed.
+
 ## Card details
 
 Cards can have a due date, labels and assignees:
@@ -115,6 +121,7 @@ Events look like `{"type": "card.updated", "board_id": 1, "actor_id": 2, "data":
 | type | data |
 |---|---|
 | `board.updated` | `board` (without `starred`, which is per user) |
+| `board.closed`, `board.reopened` | `board` (the socket stays open) |
 | `board.deleted` | `{}` (then the socket closes with 4404) |
 | `list.created`, `list.updated` | `list`, `list_ids` (the board's lists in their new order) |
 | `list.deleted` | `list_id`, `name`, `list_ids` |
@@ -168,7 +175,7 @@ GitHub Actions runs the same checks on every pull request and every push to `mai
 15. Build plan: requirements mapped to the API, gaps, frontend build order ([`docs/build-plan.md`](docs/build-plan.md))
 16. Labels: six default labels on a new board, optional label names
 17. Board details: description and a per-user star
-18. Close and reopen boards
+18. Close and reopen boards (closed boards are read-only)
 19. Restore lists and cards to their original position; sort a list once
 20. Card and activity reads for the UI: comment counts, one comment, activity filters, board snapshot
 21. Checklists on cards

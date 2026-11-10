@@ -1,9 +1,12 @@
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.api.access import EditableBoard, OwnedBoard, ViewableBoard
+from app.api.access import EditableBoard, OwnedBoardAnyState, ViewableBoard
 from app.api.deps import CurrentUser
+from app.api.errors import validation_error
 from app.core.database import get_db
 from app.models.board import Board
 from app.models.board_member import BoardMember, BoardRole
@@ -23,8 +26,17 @@ def board_read(board: Board, starred: bool) -> BoardRead:
         name=board.name,
         description=board.description,
         created_at=board.created_at,
+        closed_at=board.closed_at,
         starred=starred,
     )
+
+
+def publish_board(
+    db: Session, event_type: EventType, board: Board, user_id: int
+) -> None:
+    # Without `starred`: the event goes to everyone, and stars are per user.
+    data = board_read(board, starred=False).model_dump(mode="json", exclude={"starred"})
+    publish(db, board.id, event_type, {"board": data}, actor_id=user_id)
 
 
 @router.post("", response_model=BoardRead, status_code=status.HTTP_201_CREATED)
@@ -42,18 +54,24 @@ def create_board(
 
 
 @router.get("", response_model=list[BoardRead])
-def list_boards(user: CurrentUser, db: Session = Depends(get_db)) -> list[BoardRead]:
-    # Boards the user owns or is a member of.
-    boards = db.scalars(
-        select(Board)
-        .where(
-            or_(
-                Board.owner_id == user.id,
-                Board.members.any(BoardMember.user_id == user.id),
-            )
+def list_boards(
+    user: CurrentUser, closed: bool = False, db: Session = Depends(get_db)
+) -> list[BoardRead]:
+    # Boards the user owns or is a member of: open ones in creation order, or
+    # with ?closed=true the closed ones, most recently closed first.
+    query = select(Board).where(
+        or_(
+            Board.owner_id == user.id,
+            Board.members.any(BoardMember.user_id == user.id),
         )
-        .order_by(Board.id)
-    ).all()
+    )
+    if closed:
+        query = query.where(Board.closed_at.is_not(None)).order_by(
+            Board.closed_at.desc(), Board.id.desc()
+        )
+    else:
+        query = query.where(Board.closed_at.is_(None)).order_by(Board.id)
+    boards = db.scalars(query).all()
     # One query for all the stars, not one per board.
     starred = starred_ids(db, user.id, [board.id for board in boards])
     return [board_read(board, board.id in starred) for board in boards]
@@ -87,18 +105,36 @@ def update_board(
     if "description" in payload.model_fields_set:
         board.description = payload.description
     db.flush()
-    publish(
-        db,
-        board.id,
-        EventType.BOARD_UPDATED,
-        # Without `starred`: the event goes to everyone, and stars are per user.
-        {
-            "board": board_read(board, starred=False).model_dump(
-                mode="json", exclude={"starred"}
-            )
-        },
-        actor_id=user.id,
-    )
+    publish_board(db, EventType.BOARD_UPDATED, board, user.id)
+    db.commit()
+    db.refresh(board)
+    return board_read(board, is_starred(db, board.id, user.id))
+
+
+@router.post("/{board_id}/close", response_model=BoardRead)
+def close_board(
+    board: OwnedBoardAnyState, user: CurrentUser, db: Session = Depends(get_db)
+) -> BoardRead:
+    if board.closed_at is not None:
+        raise validation_error("path", "board_id", "Board is already closed", board.id)
+    board.closed_at = datetime.now(UTC)
+    db.flush()
+    # Watchers' sockets stay open: a closed board can still be read.
+    publish_board(db, EventType.BOARD_CLOSED, board, user.id)
+    db.commit()
+    db.refresh(board)
+    return board_read(board, is_starred(db, board.id, user.id))
+
+
+@router.post("/{board_id}/reopen", response_model=BoardRead)
+def reopen_board(
+    board: OwnedBoardAnyState, user: CurrentUser, db: Session = Depends(get_db)
+) -> BoardRead:
+    if board.closed_at is None:
+        raise validation_error("path", "board_id", "Board is not closed", board.id)
+    board.closed_at = None
+    db.flush()
+    publish_board(db, EventType.BOARD_REOPENED, board, user.id)
     db.commit()
     db.refresh(board)
     return board_read(board, is_starred(db, board.id, user.id))
@@ -106,7 +142,10 @@ def update_board(
 
 @router.delete("/{board_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_board(
-    board: OwnedBoard, user: CurrentUser, db: Session = Depends(get_db)
+    # Open or closed: the frontend offers delete only for closed boards (D2).
+    board: OwnedBoardAnyState,
+    user: CurrentUser,
+    db: Session = Depends(get_db),
 ) -> None:
     # Before deleting, so watchers learn why their sockets are about to close.
     publish(db, board.id, EventType.BOARD_DELETED, {}, actor_id=user.id)

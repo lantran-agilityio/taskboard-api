@@ -29,5 +29,6 @@ class BoardRead(BaseModel):
     name: str
     description: str | None
     created_at: UtcDatetime
+    closed_at: UtcDatetime | None
     # Whether the user asking has starred it; each user has their own stars.
     starred: bool
