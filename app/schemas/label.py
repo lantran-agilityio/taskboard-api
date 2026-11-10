@@ -1,18 +1,21 @@
-from typing import Self
+from typing import Annotated, Self
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
 
 from app.models.label import LabelColor
-from app.schemas.common import Name
+
+# Unlike the shared Name, a label's name may be empty: a label can be just a colour,
+# and every new board starts with six of those.
+LabelName = Annotated[str, StringConstraints(strip_whitespace=True, max_length=100)]
 
 
 class LabelCreate(BaseModel):
-    name: Name
+    name: LabelName = ""
     color: LabelColor
 
 
 class LabelUpdate(BaseModel):
-    name: Name | None = None
+    name: LabelName | None = None
     color: LabelColor | None = None
 
     @model_validator(mode="after")

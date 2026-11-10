@@ -9,6 +9,7 @@ from app.api.deps import CurrentUser
 from app.core.database import get_db
 from app.models.board import Board
 from app.models.board_member import BoardMember
+from app.models.label import Label, LabelColor
 from app.realtime.events import EventType, publish
 from app.schemas.board import BoardCreate, BoardRead, BoardUpdate
 
@@ -20,6 +21,9 @@ def create_board(
     payload: BoardCreate, user: CurrentUser, db: Session = Depends(get_db)
 ) -> Board:
     board = Board(name=payload.name, owner=user)
+    # One unnamed label per colour, in the enum's order, so cards can be tagged at once.
+    # No events: nobody can be watching a board that doesn't exist yet.
+    board.labels = [Label(name="", color=color) for color in LabelColor]
     db.add(board)
     db.commit()
     db.refresh(board)
