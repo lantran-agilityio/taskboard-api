@@ -2,17 +2,25 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.access import EditableBoard, OwnedBoardAnyState, ViewableBoard
 from app.api.deps import CurrentUser
 from app.api.errors import validation_error
 from app.core.database import get_db
 from app.models.board import Board
+from app.models.board_list import BoardList
 from app.models.board_member import BoardMember, BoardRole
+from app.models.card import Card
 from app.models.label import Label, LabelColor
 from app.realtime.events import EventType, publish
-from app.schemas.board import BoardCreate, BoardRead, BoardUpdate
+from app.schemas.board import (
+    BoardCreate,
+    BoardRead,
+    BoardSnapshot,
+    BoardUpdate,
+    ListWithCards,
+)
 from app.services.permissions import board_role
 from app.services.stars import is_starred, star, starred_ids, unstar
 
@@ -82,6 +90,29 @@ def get_board(
     board: ViewableBoard, user: CurrentUser, db: Session = Depends(get_db)
 ) -> BoardRead:
     return board_read(board, is_starred(db, board.id, user.id))
+
+
+@router.get("/{board_id}/snapshot", response_model=BoardSnapshot)
+def get_board_snapshot(
+    board: ViewableBoard, user: CurrentUser, db: Session = Depends(get_db)
+) -> BoardSnapshot:
+    """The board, its active lists and their active cards, in one request."""
+    # selectinload fetches every list's cards (and their labels and assignees)
+    # in one query each, instead of one query per list and per card.
+    lists = db.scalars(
+        select(BoardList)
+        .where(BoardList.board_id == board.id, BoardList.archived_at.is_(None))
+        .order_by(BoardList.position)
+        .options(
+            selectinload(BoardList.cards).options(
+                selectinload(Card.labels), selectinload(Card.assignees)
+            )
+        )
+    )
+    return BoardSnapshot(
+        board=board_read(board, is_starred(db, board.id, user.id)),
+        lists=[ListWithCards.model_validate(board_list) for board_list in lists],
+    )
 
 
 @router.patch("/{board_id}", response_model=BoardRead)

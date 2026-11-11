@@ -1072,3 +1072,43 @@ def test_other_users_card_archive_returns_404(
     response = client.post(f"/cards/{cards['A']['id']}/{action}", headers=other_headers)
 
     assert response.status_code == 404
+
+
+# Done and comment counts, for the card front
+
+
+def test_mark_done_without_a_due_date(client: TestClient) -> None:
+    _, list_id = card_board(client)
+    card = create_card(client, list_id)
+
+    response = client.patch(f"/cards/{card['id']}", json={"due_complete": True})
+
+    assert response.status_code == 200
+    assert response.json()["due_complete"] is True
+    assert response.json()["due_at"] is None
+    # Setting a due date later keeps it done: it's one flag.
+    later = client.patch(f"/cards/{card['id']}", json={"due_at": DUE}).json()
+    assert later["due_complete"] is True
+
+
+def test_new_card_has_no_comments(client: TestClient) -> None:
+    _, list_id = card_board(client)
+
+    assert create_card(client, list_id)["comment_count"] == 0
+
+
+def test_comment_count_follows_comments(client: TestClient) -> None:
+    board_id, list_id = card_board(client)
+    card = create_card(client, list_id)
+    other = create_card(client, list_id, "Other")
+    comments = [
+        client.post(f"/cards/{card['id']}/comments", json={"body": body}).json()
+        for body in ("One", "Two")
+    ]
+    client.delete(f"/comments/{comments[0]['id']}")
+
+    assert client.get(f"/cards/{card['id']}").json()["comment_count"] == 1
+    counts = {c["id"]: c["comment_count"] for c in cards_in(client, list_id)}
+    assert counts == {card["id"]: 1, other["id"]: 0}
+    search = client.get(f"/boards/{board_id}/cards").json()
+    assert {c["id"]: c["comment_count"] for c in search} == counts

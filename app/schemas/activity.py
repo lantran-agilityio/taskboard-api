@@ -1,9 +1,15 @@
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
 from app.realtime.events import EventType
 from app.schemas.common import UtcDatetime
+
+
+class ActivityKind(StrEnum):
+    ALL = "all"
+    COMMENTS = "comments"  # comments written, edited and deleted
 
 
 class ActivityRead(BaseModel):

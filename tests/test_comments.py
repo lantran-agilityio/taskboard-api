@@ -313,3 +313,51 @@ def test_viewer_reads_but_cannot_comment(
 
 def test_comments_need_a_token(anon_client: TestClient) -> None:
     assert anon_client.get("/cards/1/comments").status_code == 401
+
+
+# Read one
+
+
+def test_get_comment(client: TestClient, card: dict) -> None:
+    comment = comment_on(client, card["id"])
+
+    response = client.get(f"/comments/{comment['id']}")
+
+    assert response.status_code == 200
+    assert response.json() == comment
+
+
+def test_viewer_can_get_comment(
+    client: TestClient, card: dict, other_headers: dict
+) -> None:
+    comment = comment_on(client, card["id"])
+    share(client, card["board_id"], "viewer")
+
+    response = client.get(f"/comments/{comment['id']}", headers=other_headers)
+
+    assert response.status_code == 200
+    assert response.json()["card_id"] == card["id"]
+
+
+def test_get_comment_on_archived_card(client: TestClient, card: dict) -> None:
+    comment = comment_on(client, card["id"])
+    client.post(f"/cards/{card['id']}/archive")
+
+    assert client.get(f"/comments/{comment['id']}").status_code == 200
+
+
+def test_get_missing_comment_returns_404(client: TestClient) -> None:
+    response = client.get("/comments/999999")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Comment not found"}
+
+
+def test_get_comment_on_someone_elses_board_returns_404(
+    client: TestClient, card: dict, other_headers: dict
+) -> None:
+    comment = comment_on(client, card["id"])
+
+    response = client.get(f"/comments/{comment['id']}", headers=other_headers)
+
+    assert response.status_code == 404

@@ -144,3 +144,128 @@ def test_non_member_gets_404(
 
 def test_missing_board_returns_404(client: TestClient) -> None:
     assert client.get("/boards/999/activity").status_code == 404
+
+
+# Filters
+
+
+@pytest.fixture
+def two_cards(client: TestClient, board: dict) -> dict:
+    """Cards C and D on lists A and B, with a comment each and some changes."""
+    a = client.post(f"/boards/{board['id']}/lists", json={"name": "A"}).json()
+    b = client.post(f"/boards/{board['id']}/lists", json={"name": "B"}).json()
+    c = client.post(f"/lists/{a['id']}/cards", json={"title": "C"}).json()
+    d = client.post(f"/lists/{a['id']}/cards", json={"title": "D"}).json()
+    client.patch(f"/cards/{c['id']}", json={"list_id": b["id"]})
+    comment = client.post(f"/cards/{c['id']}/comments", json={"body": "Hi"}).json()
+    client.patch(f"/comments/{comment['id']}", json={"body": "Hello"})
+    client.post(f"/cards/{d['id']}/comments", json={"body": "On D"})
+    client.post(f"/cards/{c['id']}/archive")
+    client.patch(f"/lists/{a['id']}", json={"name": "A2"})
+    return {"board_id": board["id"], "c": c, "d": d, "comment": comment}
+
+
+def filtered(client: TestClient, board_id: int, **params: object) -> list[dict]:
+    response = client.get(f"/boards/{board_id}/activity", params=params)
+    assert response.status_code == 200
+    return response.json()["items"]
+
+
+def test_kind_comments_keeps_only_comments(client: TestClient, two_cards: dict) -> None:
+    client.delete(f"/comments/{two_cards['comment']['id']}")
+
+    entries = filtered(client, two_cards["board_id"], kind="comments")
+
+    assert [e["type"] for e in entries] == [
+        "comment.deleted",
+        "comment.created",
+        "comment.updated",
+        "comment.created",
+    ]
+
+
+def test_kind_all_is_the_default(client: TestClient, two_cards: dict) -> None:
+    board_id = two_cards["board_id"]
+
+    assert filtered(client, board_id, kind="all") == filtered(client, board_id)
+
+
+def test_card_id_keeps_that_cards_entries(client: TestClient, two_cards: dict) -> None:
+    entries = filtered(client, two_cards["board_id"], card_id=two_cards["c"]["id"])
+
+    assert [e["type"] for e in entries] == [
+        "card.archived",
+        "comment.updated",
+        "comment.created",
+        "card.updated",
+        "card.created",
+    ]
+
+
+def test_card_id_keeps_a_deleted_cards_history(
+    client: TestClient, two_cards: dict
+) -> None:
+    card_id = two_cards["c"]["id"]
+    client.delete(f"/comments/{two_cards['comment']['id']}")
+    client.delete(f"/cards/{card_id}")
+
+    entries = filtered(client, two_cards["board_id"], card_id=card_id)
+
+    assert [e["type"] for e in entries] == [
+        "card.deleted",
+        "comment.deleted",
+        "card.archived",
+        "comment.updated",
+        "comment.created",
+        "card.updated",
+        "card.created",
+    ]
+
+
+def test_filters_combine(client: TestClient, two_cards: dict) -> None:
+    entries = filtered(
+        client, two_cards["board_id"], kind="comments", card_id=two_cards["d"]["id"]
+    )
+
+    assert [(e["type"], e["data"]["comment"]["body"]) for e in entries] == [
+        ("comment.created", "On D")
+    ]
+
+
+def test_card_from_another_board_finds_nothing(
+    client: TestClient, two_cards: dict
+) -> None:
+    other = client.post("/boards", json={"name": "Other"}).json()
+
+    assert filtered(client, other["id"], card_id=two_cards["c"]["id"]) == []
+
+
+def test_filtered_pages(client: TestClient, two_cards: dict) -> None:
+    board_id, card_id = two_cards["board_id"], two_cards["c"]["id"]
+
+    first = client.get(
+        f"/boards/{board_id}/activity", params={"card_id": card_id, "limit": 3}
+    ).json()
+    second = client.get(
+        f"/boards/{board_id}/activity",
+        params={"card_id": card_id, "limit": 3, "before": first["next_before"]},
+    ).json()
+
+    assert [e["type"] for e in first["items"]] == [
+        "card.archived",
+        "comment.updated",
+        "comment.created",
+    ]
+    assert [e["type"] for e in second["items"]] == ["card.updated", "card.created"]
+    assert second["next_before"] is None
+
+
+@pytest.mark.parametrize(
+    "params", [{"kind": "bogus"}, {"card_id": 0}, {"card_id": "x"}]
+)
+def test_invalid_filters_return_422(
+    client: TestClient, board: dict, params: dict
+) -> None:
+    response = client.get(f"/boards/{board['id']}/activity", params=params)
+
+    assert response.status_code == 422
