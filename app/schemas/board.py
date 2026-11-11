@@ -1,7 +1,9 @@
 from typing import Self
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
+from app.schemas.board_list import ListRead
+from app.schemas.card import CardRead
 from app.schemas.common import Description, Name, UtcDatetime
 
 
@@ -32,3 +34,15 @@ class BoardRead(BaseModel):
     closed_at: UtcDatetime | None
     # Whether the user asking has starred it; each user has their own stars.
     starred: bool
+
+
+class ListWithCards(ListRead):
+    # Read from BoardList.active_cards: the cards relationship has archived ones too.
+    cards: list[CardRead] = Field(validation_alias="active_cards")
+
+
+class BoardSnapshot(BaseModel):
+    """A board with its active lists and their active cards, in board order."""
+
+    board: BoardRead
+    lists: list[ListWithCards]

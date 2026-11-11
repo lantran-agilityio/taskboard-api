@@ -599,6 +599,11 @@ ACTIONS: dict[str, tuple[Request, int, int]] = {
         200,
         200,
     ),
+    "read one comment": (
+        lambda s: ("GET", f"/comments/{s['comment']['id']}", None),
+        200,
+        200,
+    ),
     "comment": (
         lambda s: ("POST", f"/cards/{s['card']['id']}/comments", {"body": "Me too"}),
         403,
@@ -617,6 +622,11 @@ ACTIONS: dict[str, tuple[Request, int, int]] = {
     ),
     "read activity": (
         lambda s: ("GET", f"/boards/{s['board']['id']}/activity", None),
+        200,
+        200,
+    ),
+    "read snapshot": (
+        lambda s: ("GET", f"/boards/{s['board']['id']}/snapshot", None),
         200,
         200,
     ),

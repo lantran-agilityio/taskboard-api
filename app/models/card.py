@@ -8,15 +8,20 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     false,
+    func,
+    select,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, column_property, mapped_column, relationship
 
 from app.core.database import Base
 from app.models.card_details import card_assignees, card_labels
 
+# Imported at runtime (not only for type checking) because comment_count's
+# subquery needs the table; comment.py imports Card only for type checking.
+from app.models.comment import Comment
+
 if TYPE_CHECKING:
     from app.models.board_list import BoardList
-    from app.models.comment import Comment
     from app.models.label import Label
     from app.models.user import User
 
@@ -44,6 +49,14 @@ class Card(Base):
     archived_at: Mapped[datetime | None]
     # Where it was when archived, so restoring puts it back there.
     archived_position: Mapped[int | None]
+    # Loaded in the same SELECT as the card, so a list of cards gets its counts
+    # without one query per card. Read-only: it changes as comments do.
+    comment_count: Mapped[int] = column_property(
+        select(func.count(Comment.id))
+        .where(Comment.card_id == id)
+        .correlate_except(Comment)
+        .scalar_subquery()
+    )
 
     board_list: Mapped["BoardList"] = relationship(back_populates="cards")
     labels: Mapped[list["Label"]] = relationship(

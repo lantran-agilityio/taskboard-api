@@ -1,5 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import event
+from sqlalchemy.orm import Session
 
 
 def create_board(client: TestClient, name: str = "Project X") -> dict:
@@ -323,3 +325,115 @@ def test_timestamps_are_in_utc(client: TestClient) -> None:
     ]
 
     assert [item["created_at"][-1] for item in responses] == ["Z"] * 4
+
+
+# Snapshot
+
+
+def test_snapshot_of_empty_board(client: TestClient) -> None:
+    board = create_board(client)
+
+    response = client.get(f"/boards/{board['id']}/snapshot")
+
+    assert response.status_code == 200
+    assert response.json() == {"board": board, "lists": []}
+
+
+def test_snapshot_has_active_lists_and_cards_in_order(client: TestClient) -> None:
+    board = create_board(client)
+    board_id = board["id"]
+    lists = [
+        client.post(f"/boards/{board_id}/lists", json={"name": n}).json()
+        for n in ("A", "B", "Gone")
+    ]
+    a, b, gone = (item["id"] for item in lists)
+    client.post(f"/lists/{gone}/archive")
+    client.patch(f"/lists/{b}", json={"position": 0})
+    label = client.get(f"/boards/{board_id}/labels").json()[0]["id"]
+    me = client.get("/users/me").json()["id"]
+    first = client.post(
+        f"/lists/{a}/cards",
+        json={"title": "First", "label_ids": [label], "assignee_ids": [me]},
+    ).json()
+    old = client.post(f"/lists/{a}/cards", json={"title": "Old"}).json()
+    second = client.post(f"/lists/{a}/cards", json={"title": "Second"}).json()
+    client.post(f"/cards/{old['id']}/archive")
+    client.post(f"/cards/{first['id']}/comments", json={"body": "Hi"})
+    client.put(f"/boards/{board_id}/star")
+
+    body = client.get(f"/boards/{board_id}/snapshot").json()
+
+    assert body["board"] == {**board, "starred": True}
+    assert [item["name"] for item in body["lists"]] == ["B", "A"]
+    assert body["lists"][0]["cards"] == []
+    assert body["lists"][1] == {
+        **client.get(f"/lists/{a}").json(),
+        "cards": client.get(f"/lists/{a}/cards").json(),
+    }
+    cards = body["lists"][1]["cards"]
+    assert [card["id"] for card in cards] == [first["id"], second["id"]]
+    assert cards[0]["label_ids"] == [label]
+    assert cards[0]["assignee_ids"] == [me]
+    assert cards[0]["comment_count"] == 1
+
+
+def test_viewer_can_read_snapshot(client: TestClient, other_headers: dict) -> None:
+    board = create_board(client)
+    client.post(
+        f"/boards/{board['id']}/members",
+        json={"email": "bob@example.com", "role": "viewer"},
+    )
+
+    response = client.get(f"/boards/{board['id']}/snapshot", headers=other_headers)
+
+    assert response.status_code == 200
+
+
+def test_snapshot_of_closed_board(client: TestClient) -> None:
+    board = create_board(client)
+    client.post(f"/boards/{board['id']}/close")
+
+    assert client.get(f"/boards/{board['id']}/snapshot").status_code == 200
+
+
+def test_snapshot_of_someone_elses_board_returns_404(
+    client: TestClient, other_headers: dict
+) -> None:
+    board = create_board(client)
+
+    response = client.get(f"/boards/{board['id']}/snapshot", headers=other_headers)
+
+    assert response.status_code == 404
+
+
+def count_snapshot_queries(client: TestClient, db: Session, board_id: int) -> int:
+    statements = []
+
+    def record(*args: object) -> None:
+        statements.append(args)
+
+    connection = db.connection()
+    event.listen(connection, "before_cursor_execute", record)
+    try:
+        assert client.get(f"/boards/{board_id}/snapshot").status_code == 200
+    finally:
+        event.remove(connection, "before_cursor_execute", record)
+    return len(statements)
+
+
+def test_snapshot_query_count_does_not_grow_with_the_board(
+    client: TestClient, db: Session
+) -> None:
+    board_id = create_board(client)["id"]
+
+    def add_list_with_cards() -> None:
+        board_list = client.post(f"/boards/{board_id}/lists", json={"name": "L"}).json()
+        for title in ("A", "B"):
+            client.post(f"/lists/{board_list['id']}/cards", json={"title": title})
+
+    add_list_with_cards()
+    small = count_snapshot_queries(client, db, board_id)
+    for _ in range(4):
+        add_list_with_cards()
+
+    assert count_snapshot_queries(client, db, board_id) == small

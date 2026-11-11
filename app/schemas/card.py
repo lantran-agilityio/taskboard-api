@@ -70,3 +70,4 @@ class CardRead(BaseModel):
     due_complete: bool
     label_ids: list[int]
     assignee_ids: list[int]
+    comment_count: int

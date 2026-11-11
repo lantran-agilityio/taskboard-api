@@ -4,7 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.access import EditableCard, EditableComment, ViewableCard
+from app.api.access import (
+    EditableCard,
+    EditableComment,
+    ViewableCard,
+    ViewableComment,
+)
 from app.api.deps import CurrentUser, Pagination
 from app.api.errors import validation_error
 from app.core.database import get_db
@@ -17,7 +22,7 @@ from app.services.pagination import PageResult, paginate
 
 # Comments are written and read through their card...
 card_comments_router = APIRouter(prefix="/cards/{card_id}/comments", tags=["comments"])
-# ...and edited and deleted by their own id.
+# ...and read (for a link to one comment), edited and deleted by their own id.
 router = APIRouter(prefix="/comments", tags=["comments"])
 
 
@@ -67,6 +72,12 @@ def list_comments(
     """The card's comments, newest first."""
     query = select(Comment).where(Comment.card_id == card.id)
     return paginate(db, query, Comment.id, page.limit, page.before)
+
+
+@router.get("/{comment_id}", response_model=CommentRead)
+def get_comment(comment: ViewableComment) -> Comment:
+    """One comment; its card_id tells a link which card to open."""
+    return comment
 
 
 @router.patch("/{comment_id}", response_model=CommentRead)
