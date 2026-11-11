@@ -475,3 +475,77 @@ def test_listener_reconnects_and_asks_for_resync(
 
     assert event["type"] == "board.updated"
     assert event["data"]["board"]["name"] == "After restart"
+
+
+def test_checklist_events(committed_client: TestClient) -> None:
+    board_id = make_board(committed_client)
+    card_id = make_card(
+        committed_client, make_list(committed_client, board_id, "A"), "C"
+    )
+
+    with watch(committed_client, board_id) as ws:
+        first = committed_client.post(f"/cards/{card_id}/checklists", json={}).json()
+        event = ws.receive_json()
+        assert event["type"] == "checklist.created"
+        assert event["data"] == {
+            "card_id": card_id,
+            "checklist": first,
+            "checklist_ids": [first["id"]],
+        }
+
+        second = committed_client.post(
+            f"/cards/{card_id}/checklists", json={"title": "Two"}
+        ).json()
+        ws.receive_json()  # checklist.created
+        committed_client.patch(f"/checklists/{second['id']}", json={"position": 0})
+        event = ws.receive_json()
+        assert event["type"] == "checklist.updated"
+        assert event["data"]["card_id"] == card_id
+        assert event["data"]["checklist"]["position"] == 0
+        assert event["data"]["checklist_ids"] == [second["id"], first["id"]]
+
+        committed_client.delete(f"/checklists/{second['id']}")
+        event = ws.receive_json()
+        assert event["type"] == "checklist.deleted"
+        assert event["data"] == {
+            "card_id": card_id,
+            "checklist_id": second["id"],
+            "title": "Two",
+            "checklist_ids": [first["id"]],
+        }
+
+
+def test_checklist_item_events(committed_client: TestClient) -> None:
+    board_id = make_board(committed_client)
+    card_id = make_card(
+        committed_client, make_list(committed_client, board_id, "A"), "C"
+    )
+    checklist = committed_client.post(f"/cards/{card_id}/checklists", json={}).json()
+
+    with watch(committed_client, board_id) as ws:
+        item = committed_client.post(
+            f"/checklists/{checklist['id']}/items", json={"text": "Step"}
+        ).json()
+        event = ws.receive_json()
+        assert event["type"] == "checklist_item.created"
+        assert event["data"] == {
+            "card_id": card_id,
+            "item": item,
+            "item_ids": [item["id"]],
+        }
+
+        committed_client.patch(f"/checklist-items/{item['id']}", json={"done": True})
+        event = ws.receive_json()
+        assert event["type"] == "checklist_item.updated"
+        assert event["data"]["item"] == {**item, "done": True}
+
+        committed_client.delete(f"/checklist-items/{item['id']}")
+        event = ws.receive_json()
+        assert event["type"] == "checklist_item.deleted"
+        assert event["data"] == {
+            "card_id": card_id,
+            "checklist_id": checklist["id"],
+            "item_id": item["id"],
+            "text": "Step",
+            "item_ids": [],
+        }
