@@ -404,7 +404,13 @@ def shared_board(client: TestClient) -> dict:
     ).json()
     client.post(f"/cards/{archived_card['id']}/archive")
     comment = client.post(f"/cards/{card['id']}/comments", json={"body": "Hi"}).json()
+    checklist = client.post(f"/cards/{card['id']}/checklists", json={}).json()
+    item = client.post(
+        f"/checklists/{checklist['id']}/items", json={"text": "Step"}
+    ).json()
     return {
+        "checklist": checklist,
+        "item": item,
         "board": board,
         "lists": lists,
         "card": card,
@@ -431,6 +437,7 @@ def snapshot(client: TestClient, ids: dict) -> dict:
             f"/boards/{board_id}/cards", params={"archived": True}
         ).json(),
         "comments": client.get(f"/cards/{ids['card']['id']}/comments").json(),
+        "checklists": client.get(f"/cards/{ids['card']['id']}/checklists").json(),
         # A refused request must not be logged either.
         "activity": client.get(f"/boards/{board_id}/activity").json(),
     }
@@ -624,6 +631,50 @@ ACTIONS: dict[str, tuple[Request, int, int]] = {
         lambda s: ("GET", f"/boards/{s['board']['id']}/activity", None),
         200,
         200,
+    ),
+    "read checklists": (
+        lambda s: ("GET", f"/cards/{s['card']['id']}/checklists", None),
+        200,
+        200,
+    ),
+    "read checklist": (
+        lambda s: ("GET", f"/checklists/{s['checklist']['id']}", None),
+        200,
+        200,
+    ),
+    "create checklist": (
+        lambda s: ("POST", f"/cards/{s['card']['id']}/checklists", {}),
+        403,
+        201,
+    ),
+    "change checklist": (
+        lambda s: ("PATCH", f"/checklists/{s['checklist']['id']}", {"title": "X"}),
+        403,
+        200,
+    ),
+    "delete checklist": (
+        lambda s: ("DELETE", f"/checklists/{s['checklist']['id']}", None),
+        403,
+        204,
+    ),
+    "add checklist item": (
+        lambda s: (
+            "POST",
+            f"/checklists/{s['checklist']['id']}/items",
+            {"text": "More"},
+        ),
+        403,
+        201,
+    ),
+    "tick checklist item": (
+        lambda s: ("PATCH", f"/checklist-items/{s['item']['id']}", {"done": True}),
+        403,
+        200,
+    ),
+    "delete checklist item": (
+        lambda s: ("DELETE", f"/checklist-items/{s['item']['id']}", None),
+        403,
+        204,
     ),
     "read snapshot": (
         lambda s: ("GET", f"/boards/{s['board']['id']}/snapshot", None),
