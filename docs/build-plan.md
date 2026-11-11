@@ -21,7 +21,7 @@ These settle the six design questions from `requirements.md` and the choices the
 | D9 | Card numbers in addresses | **Use the card's `id`** in the frontend's address (`#card-<id>`). There is no per-board number. *Prototype update:* show `#<id>`. | The number is cosmetic. A per-board counter would need a column, a sequence per board and a migration. |
 | D10 | Comments on archived cards | **Not allowed** (the API's 422 stays). | It matches the frozen-card rule. The product's behaviour here is unconfirmed. |
 | D11 | Start dates, checklist item assignees and dates | **Start dates are deferred.** Item assignees and due dates are an optional last part of step 21. | Both are unconfirmed (R-DATE-03, R-CHECK-05). |
-| D12 | Frontend stack | **Proposed:** a separate `frontend/` app (Vite, React, TypeScript) that talks to the API over HTTP and the WebSocket, with its own CI job. **Needs your go-ahead** before step 22, since the repo is backend only today. | It's a common, well-documented stack, and it keeps the API and the UI testable on their own. |
+| D12 | Frontend stack | **Approved (2026-11-11):** a separate `frontend/` app (Vite, React, TypeScript) that talks to the API over HTTP and the WebSocket, with its own CI job. In development Vite proxies `/api` to the API, so the API needs no CORS. | It's a common, well-documented stack, and it keeps the API and the UI testable on their own. |
 
 ## Coverage
 
@@ -99,7 +99,7 @@ Six new roadmap steps, each a branch and PR with migrations, `publish()` events,
 
 ## Frontend build order
 
-Each step names the prototype screen it builds, the API it needs, and the realtime events it listens to. Before step 22, the repo needs your go-ahead on D12. The frontend reuses the prototype's layout and behaviour, never the observed product's.
+Each step names the prototype screen it builds, the API it needs, and the realtime events it listens to. D12 was approved on 2026-11-11, and step 22 adds `frontend/`. The frontend reuses the prototype's layout and behaviour, never the observed product's.
 
 1. **Step 22: shell and sign-in.** Login and register screens (the API has them; the requirements don't cover them), the token in memory with a "remember me" option, an API client that turns 422 `detail` lists into field errors, the address routes `#home`, `#board-<id>` and `#card-<id>`, and the frontend CI job. *Needs:* `/auth/register`, `/auth/token`, `/users/me`.
 2. **Step 23: home.** Board tiles, starred, recently opened (local storage), create a board, and closed boards. *Needs:* `GET/POST /boards`, steps 17 and 18.
@@ -114,6 +114,6 @@ Each step names the prototype screen it builds, the API it needs, and the realti
 - **Loading a board today takes one request per list.** That's why step 20's snapshot comes before step 24. Without it, a board with 15 lists makes 16 requests.
 - **Drag and realtime races.** Two people dragging at once both succeed, because the board lock serialises them. The second person's screen must then take the server's order from the event. Step 25 needs a test with two browser sessions.
 - **Token storage.** A token in `localStorage` can be read by any injected script. Keep it in memory by default, and treat "remember me" as a choice the user makes knowingly. Revisit if the API gets cookie sessions.
-- **The repo stops being backend only.** CLAUDE.md, CI and the README need a frontend section in step 22 (D12).
+- **The repo stops being backend only.** Done in step 22: CLAUDE.md, CI and the README have frontend sections.
 - **The prototype drifts from the plan.** The prototype updates listed in D3, D5, D6 and D9 should land before step 23, so the UI is built from a picture that matches the API.
 - **Unconfirmed requirements** (R-MEMBER-05, R-DATE-03, R-CHECK-05 and the open questions in `requirements.md`) need a second-account observe session. D5, D10 and D11 may change after it.

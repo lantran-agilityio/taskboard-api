@@ -152,14 +152,27 @@ ws.onmessage = (message) => console.log(JSON.parse(message.data));
 ws.onclose = (event) => console.log("closed", event.code);
 ```
 
+## Frontend
+
+The web app lives in [`frontend/`](frontend/) (Vite, React, TypeScript). It needs Node.js (the version in `frontend/.nvmrc`, for example `brew install node@22`). With the API running:
+
+```sh
+cd frontend
+npm ci
+npm run dev        # http://localhost:5173, forwards /api to the API on port 8000
+```
+
+So far it has sign-in and register screens and the `#home`, `#board-<id>` and `#card-<id>` addresses; the pages behind them come in roadmap steps 23–28. "Remember me" keeps the sign-in token in the browser's local storage; without it, closing or reloading the tab signs out. Tokens last 30 minutes either way.
+
 ## Test
 
 ```sh
 uv run pytest      # runs against the taskboard_test database
 uv run ruff check .
+cd frontend && npm test && npm run lint && npm run typecheck
 ```
 
-GitHub Actions runs the same checks on every pull request and every push to `main` (`.github/workflows/ci.yml`): `ruff check` and `ruff format --check` in one job, and `pytest` against a PostgreSQL 17 service container in another.
+GitHub Actions runs the same checks on every pull request and every push to `main` (`.github/workflows/ci.yml`): `ruff check` and `ruff format --check` in one job, `pytest` against a PostgreSQL 17 service container in another, and the frontend's lint, type check, tests and build in a third.
 
 ## Roadmap
 
@@ -184,4 +197,5 @@ GitHub Actions runs the same checks on every pull request and every push to `mai
 19. Restore lists and cards to their original position; sort a list once
 20. Card and activity reads for the UI: comment counts, one comment, activity filters, board snapshot
 21. Checklists on cards
-22. Frontend (steps 22–28 in [`docs/build-plan.md`](docs/build-plan.md#frontend-build-order)), after the stack is agreed
+22. Frontend shell and sign-in (Vite, React, TypeScript in [`frontend/`](frontend/))
+23. Frontend: the rest of [`docs/build-plan.md`](docs/build-plan.md#frontend-build-order), steps 23–28

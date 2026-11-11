@@ -46,3 +46,6 @@ dist/
 # SQLite
 *.db
 pytest-report.xml
+
+# Frontend
+node_modules/
