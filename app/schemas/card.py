@@ -71,5 +71,3 @@ class CardRead(BaseModel):
     label_ids: list[int]
     assignee_ids: list[int]
     comment_count: int
-    checklist_done: int
-    checklist_total: int

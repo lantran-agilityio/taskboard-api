@@ -37,12 +37,6 @@ class EventType(StrEnum):
     COMMENT_CREATED = "comment.created"
     COMMENT_UPDATED = "comment.updated"
     COMMENT_DELETED = "comment.deleted"
-    CHECKLIST_CREATED = "checklist.created"
-    CHECKLIST_UPDATED = "checklist.updated"
-    CHECKLIST_DELETED = "checklist.deleted"
-    CHECKLIST_ITEM_CREATED = "checklist_item.created"
-    CHECKLIST_ITEM_UPDATED = "checklist_item.updated"
-    CHECKLIST_ITEM_DELETED = "checklist_item.deleted"
 
 
 def publish(

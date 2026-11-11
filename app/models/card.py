@@ -16,10 +16,8 @@ from sqlalchemy.orm import Mapped, column_property, mapped_column, relationship
 from app.core.database import Base
 from app.models.card_details import card_assignees, card_labels
 
-# Imported at runtime (not only for type checking) because the count
-# subqueries need these tables; each imports Card only for type checking.
-from app.models.checklist import Checklist
-from app.models.checklist_item import ChecklistItem
+# Imported at runtime (not only for type checking) because comment_count's
+# subquery needs the table; comment.py imports Card only for type checking.
 from app.models.comment import Comment
 
 if TYPE_CHECKING:
@@ -59,21 +57,6 @@ class Card(Base):
         .correlate_except(Comment)
         .scalar_subquery()
     )
-    # Checklist progress for the card front, loaded the same way.
-    checklist_total: Mapped[int] = column_property(
-        select(func.count(ChecklistItem.id))
-        .join(Checklist, ChecklistItem.checklist_id == Checklist.id)
-        .where(Checklist.card_id == id)
-        .correlate_except(Checklist, ChecklistItem)
-        .scalar_subquery()
-    )
-    checklist_done: Mapped[int] = column_property(
-        select(func.count(ChecklistItem.id))
-        .join(Checklist, ChecklistItem.checklist_id == Checklist.id)
-        .where(Checklist.card_id == id, ChecklistItem.done)
-        .correlate_except(Checklist, ChecklistItem)
-        .scalar_subquery()
-    )
 
     board_list: Mapped["BoardList"] = relationship(back_populates="cards")
     labels: Mapped[list["Label"]] = relationship(
@@ -86,13 +69,6 @@ class Card(Base):
     # deleting a card (or its list or board) doesn't load them first.
     comments: Mapped[list["Comment"]] = relationship(
         back_populates="card", cascade="all, delete-orphan", passive_deletes=True
-    )
-    # passive_deletes for the same reason as comments.
-    checklists: Mapped[list["Checklist"]] = relationship(
-        back_populates="card",
-        order_by="Checklist.position",
-        cascade="all, delete-orphan",
-        passive_deletes=True,
     )
 
     @property

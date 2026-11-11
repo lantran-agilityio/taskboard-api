@@ -32,10 +32,6 @@ def closed_board(client: TestClient, other_headers: dict) -> dict:
     }
     card = client.post(f"/lists/{lists['A']['id']}/cards", json={"title": "C"}).json()
     comment = client.post(f"/cards/{card['id']}/comments", json={"body": "Hi"}).json()
-    checklist = client.post(f"/cards/{card['id']}/checklists", json={}).json()
-    item = client.post(
-        f"/checklists/{checklist['id']}/items", json={"text": "Step"}
-    ).json()
     label = client.get(f"/boards/{board['id']}/labels").json()[0]
     return {
         "board": close(client, board["id"]),
@@ -43,8 +39,6 @@ def closed_board(client: TestClient, other_headers: dict) -> dict:
         "lists": lists,
         "card": card,
         "comment": comment,
-        "checklist": checklist,
-        "item": item,
         "label": label,
     }
 
@@ -59,7 +53,6 @@ def snapshot(client: TestClient, ids: dict) -> dict:
         "labels": client.get(f"/boards/{board_id}/labels").json(),
         "members": client.get(f"/boards/{board_id}/members").json(),
         "comments": client.get(f"/cards/{ids['card']['id']}/comments").json(),
-        "checklists": client.get(f"/cards/{ids['card']['id']}/checklists").json(),
         "activity": client.get(f"/boards/{board_id}/activity").json(),
     }
 
@@ -229,32 +222,6 @@ WRITES: dict[str, Request] = {
         {"body": "N"},
     ),
     "delete comment": lambda s: ("DELETE", f"/comments/{s['comment']['id']}", None),
-    "add checklist": lambda s: ("POST", f"/cards/{s['card']['id']}/checklists", {}),
-    "change checklist": lambda s: (
-        "PATCH",
-        f"/checklists/{s['checklist']['id']}",
-        {"title": "N"},
-    ),
-    "delete checklist": lambda s: (
-        "DELETE",
-        f"/checklists/{s['checklist']['id']}",
-        None,
-    ),
-    "add checklist item": lambda s: (
-        "POST",
-        f"/checklists/{s['checklist']['id']}/items",
-        {"text": "N"},
-    ),
-    "tick checklist item": lambda s: (
-        "PATCH",
-        f"/checklist-items/{s['item']['id']}",
-        {"done": True},
-    ),
-    "delete checklist item": lambda s: (
-        "DELETE",
-        f"/checklist-items/{s['item']['id']}",
-        None,
-    ),
     "add member": lambda s: (
         "POST",
         f"/boards/{s['board']['id']}/members",

@@ -1112,30 +1112,3 @@ def test_comment_count_follows_comments(client: TestClient) -> None:
     assert counts == {card["id"]: 1, other["id"]: 0}
     search = client.get(f"/boards/{board_id}/cards").json()
     assert {c["id"]: c["comment_count"] for c in search} == counts
-
-
-def test_checklist_counts_follow_items(client: TestClient) -> None:
-    board_id, list_id = card_board(client)
-    card = create_card(client, list_id)
-    assert (card["checklist_done"], card["checklist_total"]) == (0, 0)
-    first = client.post(f"/cards/{card['id']}/checklists", json={}).json()
-    second = client.post(f"/cards/{card['id']}/checklists", json={}).json()
-    items = [
-        client.post(f"/checklists/{checklist['id']}/items", json={"text": t}).json()
-        for checklist, t in ((first, "A"), (first, "B"), (second, "C"))
-    ]
-    for item in items:
-        client.patch(f"/checklist-items/{item['id']}", json={"done": True})
-    client.patch(f"/checklist-items/{items[1]['id']}", json={"done": False})
-    client.delete(f"/checklist-items/{items[0]['id']}")
-
-    def counts(found: dict) -> tuple[int, int]:
-        return found["checklist_done"], found["checklist_total"]
-
-    assert counts(client.get(f"/cards/{card['id']}").json()) == (1, 2)
-    assert counts(cards_in(client, list_id)[0]) == (1, 2)
-    assert counts(client.get(f"/boards/{board_id}/cards").json()[0]) == (1, 2)
-    snapshot = client.get(f"/boards/{board_id}/snapshot").json()
-    assert counts(snapshot["lists"][0]["cards"][0]) == (1, 2)
-    client.delete(f"/checklists/{second['id']}")
-    assert counts(client.get(f"/cards/{card['id']}").json()) == (0, 1)

@@ -11,8 +11,9 @@ from app.api.access import (
     ViewableComment,
 )
 from app.api.deps import CurrentUser, Pagination
-from app.api.errors import check_not_frozen
+from app.api.errors import validation_error
 from app.core.database import get_db
+from app.models.card import Card
 from app.models.comment import Comment
 from app.realtime.events import EventType, publish
 from app.schemas.comment import CommentCreate, CommentRead, CommentUpdate
@@ -37,6 +38,14 @@ def publish_comment(
     )
 
 
+def check_not_frozen(card: Card) -> None:
+    """A frozen card is read-only, its comments included, until it's restored."""
+    if card.is_frozen:
+        raise validation_error(
+            "path", "card_id", "Card or its list is archived; restore it first", card.id
+        )
+
+
 @card_comments_router.post(
     "", response_model=CommentRead, status_code=status.HTTP_201_CREATED
 )
@@ -46,7 +55,7 @@ def create_comment(
     user: CurrentUser,
     db: Session = Depends(get_db),
 ) -> Comment:
-    check_not_frozen(card, "card_id", card.id)
+    check_not_frozen(card)
     comment = Comment(body=payload.body, author_id=user.id)
     card.comments.append(comment)
     db.flush()  # gives the new comment its id for the event
@@ -83,7 +92,7 @@ def update_comment(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Requires the comment's author",
         )
-    check_not_frozen(comment.card, "card_id", comment.card_id)
+    check_not_frozen(comment.card)
     comment.body = payload.body
     comment.edited_at = datetime.now(UTC)
     db.flush()
