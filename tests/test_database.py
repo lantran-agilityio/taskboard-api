@@ -14,8 +14,16 @@ def backend_pid(connection: Connection) -> int:
 
 
 def outside_connection() -> Connection:
-    """A connection from no pool, so it's never one of the pids being killed."""
-    return create_engine(settings.test_database_url, poolclass=NullPool).connect()
+    """A connection from no pool, so it's never one of the pids being killed.
+
+    Autocommit, because Postgres caches pg_stat_activity for the rest of a
+    transaction: in one transaction, terminate() would keep seeing the killed
+    backends alive.
+    """
+    engine = create_engine(
+        settings.test_database_url, poolclass=NullPool, isolation_level="AUTOCOMMIT"
+    )
+    return engine.connect()
 
 
 def terminate(pids: list[int]) -> None:
