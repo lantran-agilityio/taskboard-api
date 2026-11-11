@@ -25,6 +25,9 @@ def test_create_board(client: TestClient) -> None:
         "created_at": body["created_at"],
         "closed_at": None,
         "starred": False,
+        "role": "owner",
+        "list_count": 0,
+        "card_count": 0,
     }
 
 
@@ -363,7 +366,8 @@ def test_snapshot_has_active_lists_and_cards_in_order(client: TestClient) -> Non
 
     body = client.get(f"/boards/{board_id}/snapshot").json()
 
-    assert body["board"] == {**board, "starred": True}
+    # Lists A and B (Gone is archived); First and Second (Old is archived).
+    assert body["board"] == {**board, "starred": True, "list_count": 2, "card_count": 2}
     assert [item["name"] for item in body["lists"]] == ["B", "A"]
     assert body["lists"][0]["cards"] == []
     assert body["lists"][1] == {
@@ -437,3 +441,101 @@ def test_snapshot_query_count_does_not_grow_with_the_board(
         add_list_with_cards()
 
     assert count_snapshot_queries(client, db, board_id) == small
+
+
+# Role and counts, for the home screen
+
+
+def share_with_bob(client: TestClient, board_id: int, role: str) -> None:
+    response = client.post(
+        f"/boards/{board_id}/members",
+        json={"email": "bob@example.com", "role": role},
+    )
+    assert response.status_code == 201
+
+
+@pytest.mark.parametrize("role", ["editor", "viewer"])
+def test_board_has_the_callers_role(
+    client: TestClient, other_headers: dict, role: str
+) -> None:
+    board = create_board(client)
+    share_with_bob(client, board["id"], role)
+
+    assert client.get(f"/boards/{board['id']}").json()["role"] == "owner"
+    bobs = client.get(f"/boards/{board['id']}", headers=other_headers).json()
+    assert bobs["role"] == role
+    listed = client.get("/boards", headers=other_headers).json()
+    assert [item["role"] for item in listed] == [role]
+
+
+def test_counts_leave_out_archived_lists_and_cards(client: TestClient) -> None:
+    board_id = create_board(client)["id"]
+    a, b, gone = (
+        client.post(f"/boards/{board_id}/lists", json={"name": n}).json()["id"]
+        for n in ("A", "B", "Gone")
+    )
+    for list_id, titles in ((a, "123"), (b, "4"), (gone, "56")):
+        for title in titles:
+            client.post(f"/lists/{list_id}/cards", json={"title": title})
+    old = client.get(f"/lists/{a}/cards").json()[0]
+    client.post(f"/cards/{old['id']}/archive")
+    client.post(f"/lists/{gone}/archive")
+
+    body = client.get(f"/boards/{board_id}").json()
+
+    assert (body["list_count"], body["card_count"]) == (2, 3)
+    listed = client.get("/boards").json()[0]
+    assert (listed["list_count"], listed["card_count"]) == (2, 3)
+    snapshot = client.get(f"/boards/{board_id}/snapshot").json()["board"]
+    assert (snapshot["list_count"], snapshot["card_count"]) == (2, 3)
+
+
+def test_counts_of_a_board_with_empty_lists(client: TestClient) -> None:
+    board_id = create_board(client)["id"]
+    client.post(f"/boards/{board_id}/lists", json={"name": "A"})
+
+    body = client.get(f"/boards/{board_id}").json()
+
+    assert (body["list_count"], body["card_count"]) == (1, 0)
+
+
+def test_closed_boards_have_role_and_counts(client: TestClient) -> None:
+    board_id = create_board(client)["id"]
+    client.post(f"/boards/{board_id}/lists", json={"name": "A"})
+    closed = client.post(f"/boards/{board_id}/close").json()
+
+    listed = client.get("/boards", params={"closed": True}).json()
+
+    assert listed == [closed]
+    assert (closed["role"], closed["list_count"]) == ("owner", 1)
+
+
+def count_list_queries(client: TestClient, db: Session, headers: dict) -> int:
+    statements = []
+
+    def record(*args: object) -> None:
+        statements.append(args)
+
+    connection = db.connection()
+    event.listen(connection, "before_cursor_execute", record)
+    try:
+        assert client.get("/boards", headers=headers).status_code == 200
+    finally:
+        event.remove(connection, "before_cursor_execute", record)
+    return len(statements)
+
+
+def test_list_boards_query_count_does_not_grow(
+    client: TestClient, db: Session, other_headers: dict
+) -> None:
+    def add_board() -> None:
+        board_id = create_board(client)["id"]
+        share_with_bob(client, board_id, "editor")
+        client.post(f"/boards/{board_id}/lists", json={"name": "A"})
+
+    add_board()
+    small = count_list_queries(client, db, other_headers)
+    for _ in range(4):
+        add_board()
+
+    assert count_list_queries(client, db, other_headers) == small

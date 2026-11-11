@@ -1,5 +1,6 @@
 import type { User } from "../api/auth";
 import type { Route } from "../routes";
+import { Home } from "./Home";
 
 // The signed-in frame: a top bar and the page for the current address. Board
 // and card pages are placeholders until their roadmap steps build them.
@@ -20,14 +21,18 @@ export function TopBar({ user, onSignOut }: { user: User; onSignOut: () => void 
   );
 }
 
-export function Page({ route }: { route: Route }) {
+export function Page({
+  route,
+  token,
+  user,
+}: {
+  route: Route;
+  token: string;
+  user: User;
+}) {
   switch (route.name) {
     case "home":
-      return (
-        <Placeholder title="Your boards" step={23}>
-          Board tiles, starred and recently opened boards, and creating a board.
-        </Placeholder>
-      );
+      return <Home token={token} user={user} />;
     case "board":
       return (
         <Placeholder title={`Board ${route.id}`} step={24}>
