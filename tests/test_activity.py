@@ -269,3 +269,28 @@ def test_invalid_filters_return_422(
     response = client.get(f"/boards/{board['id']}/activity", params=params)
 
     assert response.status_code == 422
+
+
+def test_card_id_includes_checklist_entries(
+    client: TestClient, two_cards: dict
+) -> None:
+    board_id, card_id = two_cards["board_id"], two_cards["d"]["id"]
+    checklist = client.post(f"/cards/{card_id}/checklists", json={}).json()
+    item = client.post(
+        f"/checklists/{checklist['id']}/items", json={"text": "Step"}
+    ).json()
+    client.patch(f"/checklist-items/{item['id']}", json={"done": True})
+    client.delete(f"/checklists/{checklist['id']}")
+
+    entries = filtered(client, board_id, card_id=card_id, limit=4)
+
+    assert [e["type"] for e in entries] == [
+        "checklist.deleted",
+        "checklist_item.updated",
+        "checklist_item.created",
+        "checklist.created",
+    ]
+    assert (
+        filtered(client, board_id, card_id=two_cards["c"]["id"], limit=1)[0]["type"]
+        == "card.archived"
+    )

@@ -26,6 +26,8 @@ from app.models.board import Board
 from app.models.board_list import BoardList
 from app.models.board_member import BoardRole
 from app.models.card import Card
+from app.models.checklist import Checklist
+from app.models.checklist_item import ChecklistItem
 from app.models.comment import Comment
 from app.models.label import Label
 from app.services.permissions import allows, board_role
@@ -141,6 +143,45 @@ def comment_access(minimum: BoardRole) -> Callable[..., Comment]:
     return dependency
 
 
+def checklist_access(minimum: BoardRole) -> Callable[..., Checklist]:
+    def dependency(
+        checklist_id: int, user: CurrentUser, db: Session = Depends(get_db)
+    ) -> Checklist:
+        board_id = db.scalar(
+            select(BoardList.board_id)
+            .join(Card, Card.list_id == BoardList.id)
+            .join(Checklist, Checklist.card_id == Card.id)
+            .where(Checklist.id == checklist_id)
+        )
+        load_board(db, board_id, user.id, minimum, "Checklist not found")
+        checklist = db.get(Checklist, checklist_id)
+        if checklist is None:  # deleted while this request waited for the lock
+            raise HTTPException(status_code=404, detail="Checklist not found")
+        return checklist
+
+    return dependency
+
+
+def checklist_item_access(minimum: BoardRole) -> Callable[..., ChecklistItem]:
+    def dependency(
+        item_id: int, user: CurrentUser, db: Session = Depends(get_db)
+    ) -> ChecklistItem:
+        board_id = db.scalar(
+            select(BoardList.board_id)
+            .join(Card, Card.list_id == BoardList.id)
+            .join(Checklist, Checklist.card_id == Card.id)
+            .join(ChecklistItem, ChecklistItem.checklist_id == Checklist.id)
+            .where(ChecklistItem.id == item_id)
+        )
+        load_board(db, board_id, user.id, minimum, "Checklist item not found")
+        item = db.get(ChecklistItem, item_id)
+        if item is None:  # deleted while this request waited for the lock
+            raise HTTPException(status_code=404, detail="Checklist item not found")
+        return item
+
+    return dependency
+
+
 ViewableBoard = Annotated[Board, Depends(board_access(BoardRole.VIEWER))]
 EditableBoard = Annotated[Board, Depends(board_access(BoardRole.EDITOR))]
 OwnedBoard = Annotated[Board, Depends(board_access(BoardRole.OWNER))]
@@ -156,3 +197,8 @@ ViewableLabel = Annotated[Label, Depends(label_access(BoardRole.VIEWER))]
 EditableLabel = Annotated[Label, Depends(label_access(BoardRole.EDITOR))]
 ViewableComment = Annotated[Comment, Depends(comment_access(BoardRole.VIEWER))]
 EditableComment = Annotated[Comment, Depends(comment_access(BoardRole.EDITOR))]
+ViewableChecklist = Annotated[Checklist, Depends(checklist_access(BoardRole.VIEWER))]
+EditableChecklist = Annotated[Checklist, Depends(checklist_access(BoardRole.EDITOR))]
+EditableChecklistItem = Annotated[
+    ChecklistItem, Depends(checklist_item_access(BoardRole.EDITOR))
+]

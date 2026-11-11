@@ -9,6 +9,8 @@ from app.api.routes.auth import users_router
 from app.api.routes.boards import router as boards_router
 from app.api.routes.cards import board_cards_router, list_cards_router
 from app.api.routes.cards import router as cards_router
+from app.api.routes.checklists import card_checklists_router, items_router
+from app.api.routes.checklists import router as checklists_router
 from app.api.routes.comments import card_comments_router
 from app.api.routes.comments import router as comments_router
 from app.api.routes.health import router as health_router
@@ -53,6 +55,9 @@ app.include_router(cards_router)
 app.include_router(board_cards_router)
 app.include_router(card_comments_router)
 app.include_router(comments_router)
+app.include_router(card_checklists_router)
+app.include_router(checklists_router)
+app.include_router(items_router)
 app.include_router(board_labels_router)
 app.include_router(labels_router)
 app.include_router(activity_router)
