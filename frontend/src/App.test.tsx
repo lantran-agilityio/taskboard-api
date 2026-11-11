@@ -4,9 +4,15 @@ import { describe, expect, it } from "vitest";
 
 import { App } from "./App";
 import { TOKEN_KEY } from "./auth/session";
+import { recentIds } from "./recent";
 import { ALICE, fakeApi, meFor } from "./test/fakeApi";
 
 const TOKEN = { status: 200, body: { access_token: "t1", token_type: "bearer" } };
+// What home loads once signed in.
+const NO_BOARDS = {
+  "GET /boards": { status: 200, body: [] },
+  "GET /boards?closed=true": { status: 200, body: [] },
+};
 
 async function fillIn(email: string, password: string, remember = false) {
   const user = userEvent.setup();
@@ -34,7 +40,7 @@ describe("signing in", () => {
   });
 
   it("remembers the token when asked, and a reload stays signed in", async () => {
-    fakeApi({ "POST /auth/token": TOKEN, "GET /users/me": meFor("t1") });
+    fakeApi({ "POST /auth/token": TOKEN, "GET /users/me": meFor("t1"), ...NO_BOARDS });
     const { unmount } = render(<App />);
     const user = await fillIn("alice@example.com", "correct horse", true);
     await user.click(screen.getByRole("button", { name: "Sign in" }));
@@ -67,7 +73,7 @@ describe("signing in", () => {
 
   it("lands on the address asked for before signing in", async () => {
     window.location.hash = "#board-5";
-    fakeApi({ "POST /auth/token": TOKEN, "GET /users/me": meFor("t1") });
+    fakeApi({ "POST /auth/token": TOKEN, "GET /users/me": meFor("t1"), ...NO_BOARDS });
     render(<App />);
 
     const user = await fillIn("alice@example.com", "correct horse");
@@ -80,7 +86,7 @@ describe("signing in", () => {
 describe("a remembered token", () => {
   it("that the API rejects shows sign-in and is forgotten", async () => {
     window.localStorage.setItem(TOKEN_KEY, "expired");
-    fakeApi({ "GET /users/me": meFor("t1") });
+    fakeApi({ "GET /users/me": meFor("t1"), ...NO_BOARDS });
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
@@ -110,6 +116,7 @@ describe("registering", () => {
       "POST /auth/register": { status: 201, body: ALICE },
       "POST /auth/token": TOKEN,
       "GET /users/me": meFor("t1"),
+      ...NO_BOARDS,
     });
     await openRegister();
 
@@ -117,7 +124,7 @@ describe("registering", () => {
     await user.click(screen.getByRole("button", { name: "Create account" }));
 
     expect(await screen.findByText(ALICE.email)).toBeInTheDocument();
-    expect(calls.map((call) => call.key)).toEqual([
+    expect(calls.map((call) => call.key).slice(0, 3)).toEqual([
       "POST /auth/register",
       "POST /auth/token",
       "GET /users/me",
@@ -174,7 +181,7 @@ describe("registering", () => {
 describe("signing out", () => {
   it("clears the session and the remembered token", async () => {
     window.localStorage.setItem(TOKEN_KEY, "t1");
-    fakeApi({ "GET /users/me": meFor("t1") });
+    fakeApi({ "GET /users/me": meFor("t1"), ...NO_BOARDS });
     render(<App />);
     await screen.findByText(ALICE.email);
 
@@ -182,5 +189,18 @@ describe("signing out", () => {
 
     expect(screen.getByRole("heading", { name: "Sign in" })).toBeInTheDocument();
     expect(window.localStorage.getItem(TOKEN_KEY)).toBeNull();
+  });
+});
+
+describe("recently opened", () => {
+  it("records a board when its address is opened", async () => {
+    window.localStorage.setItem(TOKEN_KEY, "t1");
+    window.location.hash = "#board-5";
+    fakeApi({ "GET /users/me": meFor("t1"), ...NO_BOARDS });
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Board 5" });
+
+    expect(recentIds(ALICE.id)).toEqual([5]);
   });
 });

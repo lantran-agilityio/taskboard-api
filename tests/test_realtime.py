@@ -160,7 +160,9 @@ def test_board_events(committed_client: TestClient) -> None:
         assert event["type"] == "board.updated"
         board = event["data"]["board"]
         assert (board["name"], board["description"]) == ("Renamed", "About")
-        assert "starred" not in board
+        # Per caller or derived from other rows, so not part of board events.
+        for field in ("starred", "role", "list_count", "card_count"):
+            assert field not in board
 
         committed_client.delete(f"/boards/{board_id}")
         assert ws.receive_json() == {

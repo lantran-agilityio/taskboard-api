@@ -21,14 +21,19 @@ from app.schemas.board import (
     BoardUpdate,
     ListWithCards,
 )
+from app.services.board_counts import board_counts
 from app.services.permissions import board_role
 from app.services.stars import is_starred, star, starred_ids, unstar
 
 router = APIRouter(prefix="/boards", tags=["boards"])
 
 
-def board_read(board: Board, starred: bool) -> BoardRead:
-    # Built by hand because `starred` depends on who asks, not on the board row.
+def board_read(
+    board: Board, *, starred: bool, role: BoardRole, counts: tuple[int, int]
+) -> BoardRead:
+    # Built by hand because `starred` and `role` depend on who asks, and the
+    # counts come from other tables, not from the board row.
+    list_count, card_count = counts
     return BoardRead(
         id=board.id,
         name=board.name,
@@ -36,14 +41,34 @@ def board_read(board: Board, starred: bool) -> BoardRead:
         created_at=board.created_at,
         closed_at=board.closed_at,
         starred=starred,
+        role=role,
+        list_count=list_count,
+        card_count=card_count,
     )
+
+
+def read_board(db: Session, board: Board, user_id: int) -> BoardRead:
+    """The board as one user sees it."""
+    role = board_role(board, user_id)
+    assert role is not None  # every route that calls this has checked access
+    return board_read(
+        board,
+        starred=is_starred(db, board.id, user_id),
+        role=role,
+        counts=board_counts(db, [board.id]).get(board.id, (0, 0)),
+    )
+
+
+# Left out of events: they go to everyone, and these are per user or derived.
+PER_CALLER = {"starred", "role", "list_count", "card_count"}
 
 
 def publish_board(
     db: Session, event_type: EventType, board: Board, user_id: int
 ) -> None:
-    # Without `starred`: the event goes to everyone, and stars are per user.
-    data = board_read(board, starred=False).model_dump(mode="json", exclude={"starred"})
+    data = board_read(
+        board, starred=False, role=BoardRole.OWNER, counts=(0, 0)
+    ).model_dump(mode="json", exclude=PER_CALLER)
     publish(db, board.id, event_type, {"board": data}, actor_id=user_id)
 
 
@@ -58,7 +83,7 @@ def create_board(
     db.add(board)
     db.commit()
     db.refresh(board)
-    return board_read(board, starred=False)
+    return board_read(board, starred=False, role=BoardRole.OWNER, counts=(0, 0))
 
 
 @router.get("", response_model=list[BoardRead])
@@ -79,17 +104,28 @@ def list_boards(
         )
     else:
         query = query.where(Board.closed_at.is_(None)).order_by(Board.id)
-    boards = db.scalars(query).all()
-    # One query for all the stars, not one per board.
-    starred = starred_ids(db, user.id, [board.id for board in boards])
-    return [board_read(board, board.id in starred) for board in boards]
+    # Members are loaded in one query, for every board's role.
+    boards = db.scalars(query.options(selectinload(Board.members))).all()
+    # One query each for all the stars and counts, not one per board.
+    ids = [board.id for board in boards]
+    starred = starred_ids(db, user.id, ids)
+    counts = board_counts(db, ids)
+    return [
+        board_read(
+            board,
+            starred=board.id in starred,
+            role=board_role(board, user.id) or BoardRole.VIEWER,
+            counts=counts.get(board.id, (0, 0)),
+        )
+        for board in boards
+    ]
 
 
 @router.get("/{board_id}", response_model=BoardRead)
 def get_board(
     board: ViewableBoard, user: CurrentUser, db: Session = Depends(get_db)
 ) -> BoardRead:
-    return board_read(board, is_starred(db, board.id, user.id))
+    return read_board(db, board, user.id)
 
 
 @router.get("/{board_id}/snapshot", response_model=BoardSnapshot)
@@ -110,7 +146,7 @@ def get_board_snapshot(
         )
     )
     return BoardSnapshot(
-        board=board_read(board, is_starred(db, board.id, user.id)),
+        board=read_board(db, board, user.id),
         lists=[ListWithCards.model_validate(board_list) for board_list in lists],
     )
 
@@ -139,7 +175,7 @@ def update_board(
     publish_board(db, EventType.BOARD_UPDATED, board, user.id)
     db.commit()
     db.refresh(board)
-    return board_read(board, is_starred(db, board.id, user.id))
+    return read_board(db, board, user.id)
 
 
 @router.post("/{board_id}/close", response_model=BoardRead)
@@ -154,7 +190,7 @@ def close_board(
     publish_board(db, EventType.BOARD_CLOSED, board, user.id)
     db.commit()
     db.refresh(board)
-    return board_read(board, is_starred(db, board.id, user.id))
+    return read_board(db, board, user.id)
 
 
 @router.post("/{board_id}/reopen", response_model=BoardRead)
@@ -168,7 +204,7 @@ def reopen_board(
     publish_board(db, EventType.BOARD_REOPENED, board, user.id)
     db.commit()
     db.refresh(board)
-    return board_read(board, is_starred(db, board.id, user.id))
+    return read_board(db, board, user.id)
 
 
 @router.delete("/{board_id}", status_code=status.HTTP_204_NO_CONTENT)

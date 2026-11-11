@@ -39,6 +39,8 @@ The owner can close a board to put it away, and reopen it later:
 - `POST /boards/{board_id}/close` and `POST /boards/{board_id}/reopen` return the board, with `closed_at` set while it's closed. Closing a closed board, or reopening an open one, is a 422.
 - A closed board is read-only for everyone. Everything on it can still be read, but every change (to the board, its lists, cards, labels, comments or members) is a 422 until it's reopened. Members can still leave it, star it and watch it over the WebSocket.
 - `GET /boards` lists open boards only. Add `?closed=true` to get the closed ones instead, most recently closed first.
+
+Every board in a response also says `role` (yours: `owner`, `editor` or `viewer`), `list_count` and `card_count` (active lists, and active cards in active lists), so the home screen can draw its tiles from one request. Like `starred`, these aren't in the WebSocket's `board.*` events.
 - `DELETE /boards/{board_id}` works whether the board is open or closed.
 
 ## Card details
@@ -162,7 +164,7 @@ npm ci
 npm run dev        # http://localhost:5173, forwards /api to the API on port 8000
 ```
 
-So far it has sign-in and register screens and the `#home`, `#board-<id>` and `#card-<id>` addresses; the pages behind them come in roadmap steps 23–28. "Remember me" keeps the sign-in token in the browser's local storage; without it, closing or reloading the tab signs out. Tokens last 30 minutes either way.
+So far it has sign-in and register screens and the home screen: your boards with their list and card counts, starred and recently opened boards, creating a board, and closed boards with reopen and delete. The board and card pages come in roadmap steps 24–28. "Remember me" keeps the sign-in token in the browser's local storage; without it, closing or reloading the tab signs out. Tokens last 30 minutes either way.
 
 ## Test
 
@@ -198,4 +200,5 @@ GitHub Actions runs the same checks on every pull request and every push to `mai
 20. Card and activity reads for the UI: comment counts, one comment, activity filters, board snapshot
 21. Checklists on cards
 22. Frontend shell and sign-in (Vite, React, TypeScript in [`frontend/`](frontend/))
-23. Frontend: the rest of [`docs/build-plan.md`](docs/build-plan.md#frontend-build-order), steps 23–28
+23. Frontend home: board tiles, starred, recently opened, create, closed boards
+24. Frontend: the rest of [`docs/build-plan.md`](docs/build-plan.md#frontend-build-order), steps 24–28

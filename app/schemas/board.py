@@ -2,6 +2,7 @@ from typing import Self
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.models.board_member import BoardRole
 from app.schemas.board_list import ListRead
 from app.schemas.card import CardRead
 from app.schemas.common import Description, Name, UtcDatetime
@@ -34,6 +35,11 @@ class BoardRead(BaseModel):
     closed_at: UtcDatetime | None
     # Whether the user asking has starred it; each user has their own stars.
     starred: bool
+    # The user asking's role on it: what the UI may offer them.
+    role: BoardRole
+    # Active lists, and active cards in active lists, for the home screen's tiles.
+    list_count: int
+    card_count: int
 
 
 class ListWithCards(ListRead):
