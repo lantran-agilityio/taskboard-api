@@ -5,6 +5,8 @@ import { reopenBoard, setStarred } from "../api/boards";
 import { StarIcon } from "../components/icons";
 import { InlineEdit } from "../components/InlineEdit";
 import { Avatar, type CardActions } from "./CardFront";
+import { useSession } from "../auth/session";
+import { BoardMenu } from "./BoardMenu";
 import { CardDialog } from "./CardDialog";
 import { dropIndex, isNoMove, type Span } from "./dnd";
 import * as local from "./edits";
@@ -40,6 +42,9 @@ export function BoardPage({
     null,
   );
   const [addingCardTo, setAddingCardTo] = useState<number | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const { session } = useSession();
+  const myId = session.status === "signedIn" ? session.user.id : 0;
   const lanes = useRef<HTMLDivElement>(null);
 
   const cardIds =
@@ -251,6 +256,14 @@ export function BoardPage({
             <Avatar key={member.user_id} member={member} />
           ))}
         </div>
+        <button
+          type="button"
+          className="btn"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen(!menuOpen)}
+        >
+          Menu
+        </button>
       </div>
       {board.closed_at && (
         <div className="banner gutter" role="status">
@@ -339,6 +352,19 @@ export function BoardPage({
           />
         )}
       </div>
+      {menuOpen && (
+        <BoardMenu
+          data={view.data}
+          token={token}
+          myId={myId}
+          canEdit={canEdit}
+          change={change}
+          attempt={attempt}
+          update={update}
+          subscribe={subscribe}
+          onClose={() => setMenuOpen(false)}
+        />
+      )}
       {cardId !== null && (
         <CardDialog
           key={cardId}

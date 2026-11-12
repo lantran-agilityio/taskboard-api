@@ -130,7 +130,7 @@ export function LabelsPopover({
 }
 
 /** A label's name (optional) and colour (one of the API's six). */
-function LabelEditor({
+export function LabelEditor({
   label,
   anchor,
   onClose,
