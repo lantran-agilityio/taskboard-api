@@ -21,15 +21,18 @@ export function BoardPage({
   boardId,
   token,
   cardId = null,
+  commentId = null,
   onCards,
 }: {
   boardId: number;
   token: string;
   cardId?: number | null;
+  /** A comment to highlight in the open card. */
+  commentId?: number | null;
   /** Told which cards are on screen, so opening one needs no lookup. */
   onCards?: (boardId: number, ids: Set<number>) => void;
 }) {
-  const { view, live, update, reload } = useBoard(boardId, token);
+  const { view, live, update, reload, subscribe } = useBoard(boardId, token);
   const [actionError, setActionError] = useState<string | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [listDropAt, setListDropAt] = useState<number | null>(null);
@@ -346,6 +349,8 @@ export function BoardPage({
           change={change}
           attempt={attempt}
           update={update}
+          subscribe={subscribe}
+          commentId={commentId}
           onClose={() => {
             window.location.hash = `#board-${board.id}`;
           }}

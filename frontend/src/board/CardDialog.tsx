@@ -10,6 +10,8 @@ import { InlineEdit } from "../components/InlineEdit";
 import { Markdown } from "../components/Markdown";
 import { Popover } from "../components/Popover";
 import { timeAgo } from "../format";
+import { useSession } from "../auth/session";
+import { CardFeed } from "./CardFeed";
 import { Avatar } from "./CardFront";
 import {
   DuePopover,
@@ -22,6 +24,7 @@ import * as local from "./edits";
 import {
   dueState,
   type BoardData,
+  type BoardEvent,
   type Card,
   type DueState,
   type Label,
@@ -78,6 +81,8 @@ export function CardDialog({
   change,
   attempt,
   update,
+  subscribe,
+  commentId = null,
   onClose,
 }: {
   cardId: number;
@@ -88,9 +93,15 @@ export function CardDialog({
   change: Change;
   attempt: Attempt;
   update: (change: (data: BoardData) => BoardData) => void;
+  /** The board's events, for the comments and activity panel. */
+  subscribe: (listener: (event: BoardEvent) => void) => () => void;
+  /** A comment to highlight, from a #card-…-comment-… link. */
+  commentId?: number | null;
   onClose: () => void;
 }) {
   const titleId = useId();
+  const { session } = useSession();
+  const myId = session.status === "signedIn" ? session.user.id : 0;
   const dialog = useRef<HTMLDivElement>(null);
   // The open popover and the button it hangs from (taken from the click).
   const [pop, setPop] = useState<{ kind: Pop; anchor: HTMLElement } | null>(null);
@@ -308,92 +319,125 @@ export function CardDialog({
               <span className="cardno">#{card.id}</span>
             </p>
 
-            <div className="details">
-              <section className="detail" aria-label="Labels">
-                <h3>Labels</h3>
-                <div className="row">
-                  {labelList.map((label) => (
-                    <LabelChip key={label.id} label={label} />
-                  ))}
-                  {editable && (
-                    <button
-                      type="button"
-                      className="btn sm"
-                      aria-label="Edit labels"
-                      onClick={(event) =>
-                        setPop({ kind: "labels", anchor: event.currentTarget })
-                      }
-                    >
-                      +
-                    </button>
-                  )}
-                  {!editable && labelList.length === 0 && (
-                    <span className="muted">None</span>
-                  )}
+            <div className="dlg-body">
+              <div className="dlg-main">
+                <div className="details">
+                  <section className="detail" aria-label="Labels">
+                    <h3>Labels</h3>
+                    <div className="row">
+                      {labelList.map((label) => (
+                        <LabelChip key={label.id} label={label} />
+                      ))}
+                      {editable && (
+                        <button
+                          type="button"
+                          className="btn sm"
+                          aria-label="Edit labels"
+                          onClick={(event) =>
+                            setPop({ kind: "labels", anchor: event.currentTarget })
+                          }
+                        >
+                          +
+                        </button>
+                      )}
+                      {!editable && labelList.length === 0 && (
+                        <span className="muted">None</span>
+                      )}
+                    </div>
+                  </section>
+                  <section className="detail" aria-label="Members">
+                    <h3>Members</h3>
+                    <div className="row">
+                      <span className="avs">
+                        {assignees.map((member) => (
+                          <Avatar key={member.user_id} member={member} />
+                        ))}
+                      </span>
+                      {editable && (
+                        <button
+                          type="button"
+                          className="btn sm"
+                          aria-label="Edit members"
+                          onClick={(event) =>
+                            setPop({ kind: "members", anchor: event.currentTarget })
+                          }
+                        >
+                          +
+                        </button>
+                      )}
+                      {!editable && assignees.length === 0 && (
+                        <span className="muted">None</span>
+                      )}
+                    </div>
+                  </section>
+                  <section className="detail" aria-label="Due date">
+                    <h3>Due date</h3>
+                    <div className="row">
+                      {card.due_at && due ? (
+                        <span className={`due ${due}`}>
+                          <ClockIcon />
+                          {dueText(card.due_at)}
+                          {DUE_WORD[due] && <b>{DUE_WORD[due]}</b>}
+                        </span>
+                      ) : (
+                        <span className="muted">None</span>
+                      )}
+                      {editable && (
+                        <button
+                          type="button"
+                          className="btn sm"
+                          onClick={(event) =>
+                            setPop({ kind: "due", anchor: event.currentTarget })
+                          }
+                        >
+                          {card.due_at ? "Change" : "Add"}
+                        </button>
+                      )}
+                    </div>
+                  </section>
                 </div>
-              </section>
-              <section className="detail" aria-label="Members">
-                <h3>Members</h3>
-                <div className="row">
-                  <span className="avs">
-                    {assignees.map((member) => (
-                      <Avatar key={member.user_id} member={member} />
-                    ))}
-                  </span>
-                  {editable && (
-                    <button
-                      type="button"
-                      className="btn sm"
-                      aria-label="Edit members"
-                      onClick={(event) =>
-                        setPop({ kind: "members", anchor: event.currentTarget })
-                      }
-                    >
-                      +
-                    </button>
-                  )}
-                  {!editable && assignees.length === 0 && (
-                    <span className="muted">None</span>
-                  )}
-                </div>
-              </section>
-              <section className="detail" aria-label="Due date">
-                <h3>Due date</h3>
-                <div className="row">
-                  {card.due_at && due ? (
-                    <span className={`due ${due}`}>
-                      <ClockIcon />
-                      {dueText(card.due_at)}
-                      {DUE_WORD[due] && <b>{DUE_WORD[due]}</b>}
-                    </span>
-                  ) : (
-                    <span className="muted">None</span>
-                  )}
-                  {editable && (
-                    <button
-                      type="button"
-                      className="btn sm"
-                      onClick={(event) =>
-                        setPop({ kind: "due", anchor: event.currentTarget })
-                      }
-                    >
-                      {card.due_at ? "Change" : "Add"}
-                    </button>
-                  )}
-                </div>
-              </section>
+
+                <Description
+                  text={card.description}
+                  editable={editable}
+                  onSave={(description) =>
+                    save("save the description", { description })
+                  }
+                />
+              </div>
+              <aside className="dlg-side">
+                <CardFeed
+                  cardId={card.id}
+                  boardId={data.board.id}
+                  token={token}
+                  context={{
+                    lists: data.lists,
+                    labels: data.labels,
+                    members: data.members,
+                    myId,
+                  }}
+                  members={data.members}
+                  isOwner={data.board.role === "owner"}
+                  canWrite={editable}
+                  // The API lets authors and the owner delete comments even on a
+                  // frozen card, so tidying up doesn't need a restore first.
+                  canDelete={canEdit}
+                  readOnlyNote={
+                    editable
+                      ? null
+                      : archived
+                        ? "Restore the card to comment on it."
+                        : listArchived
+                          ? "Restore its list to comment on it."
+                          : data.board.closed_at
+                            ? "The board is closed, so comments are read-only."
+                            : "Viewers can read comments but not write them."
+                  }
+                  highlightId={commentId}
+                  subscribe={subscribe}
+                />
+              </aside>
             </div>
-
-            <Description
-              text={card.description}
-              editable={editable}
-              onSave={(description) => save("save the description", { description })}
-            />
-
-            <section className="detail" aria-label="Comments and activity">
-              <h3>Comments and activity</h3>
-              <p className="muted">Coming in the next update (roadmap step 26b).</p>
-            </section>
           </>
         )}
       </div>
