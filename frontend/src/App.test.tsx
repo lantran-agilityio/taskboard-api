@@ -1,11 +1,17 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { App } from "./App";
 import { TOKEN_KEY } from "./auth/session";
 import { recentIds } from "./recent";
 import { ALICE, fakeApi, meFor } from "./test/fakeApi";
+import { installFakeWebSocket } from "./test/fakeSocket";
+
+// A board address opens the board page, which connects a socket.
+beforeEach(() => {
+  installFakeWebSocket();
+});
 
 const TOKEN = { status: 200, body: { access_token: "t1", token_type: "bearer" } };
 // What home loads once signed in.
@@ -79,7 +85,11 @@ describe("signing in", () => {
     const user = await fillIn("alice@example.com", "correct horse");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
 
-    expect(await screen.findByRole("heading", { name: "Board 5" })).toBeInTheDocument();
+    // The board page takes over (it waits for its socket before loading).
+    expect(
+      await screen.findByRole("heading", { name: "Loading the board…" }),
+    ).toBeInTheDocument();
+    expect(window.location.hash).toBe("#board-5");
   });
 });
 
@@ -199,7 +209,7 @@ describe("recently opened", () => {
     fakeApi({ "GET /users/me": meFor("t1"), ...NO_BOARDS });
     render(<App />);
 
-    await screen.findByRole("heading", { name: "Board 5" });
+    await screen.findByRole("heading", { name: "Loading the board…" });
 
     expect(recentIds(ALICE.id)).toEqual([5]);
   });
