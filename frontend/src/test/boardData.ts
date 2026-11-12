@@ -7,6 +7,7 @@ export function card(id: number, listId: number, extra: Partial<Card> = {}): Car
   return {
     id,
     list_id: listId,
+    board_id: 1,
     title: `Card ${id}`,
     description: null,
     position: 0,

@@ -45,7 +45,7 @@ Every board in a response also says `role` (yours: `owner`, `editor` or `viewer`
 
 ## Card details
 
-Cards can have a due date, labels and assignees:
+Every card in a response says which board it's on (`board_id`), so a link to one card can open it over its board. Cards can have a due date, labels and assignees:
 
 - **`due_at`:** a date and time with a timezone, such as `2026-11-20T17:00:00+07:00`. The API answers in UTC (`2026-11-20T10:00:00Z`). A time without a timezone is rejected with 422.
 - **`due_complete`:** `true` once the card is done.
@@ -164,7 +164,7 @@ npm ci
 npm run dev        # http://localhost:5173, forwards /api to the API on port 8000
 ```
 
-So far it has sign-in and register screens and the home screen: your boards with their list and card counts, starred and recently opened boards, creating a board, and closed boards with reopen and delete. Opening a board shows its lists and card fronts (labels, done, due badge, description, comment and checklist counts, assignees) and keeps them live over the WebSocket: changes made anywhere appear without a reload, and after a lost connection it reconnects and reloads the board. Editors and owners can also change the board in place: add lists and cards one after another, rename lists (and, for the owner, the board) by clicking their names, drag lists and cards (or move a list from its menu), sort a list once, mark cards done, archive a done card in one click, and archive a list after a confirmation. Changes show at once; if the API refuses one, the board says why and reloads. Viewers and closed boards get none of these controls. The card page comes in roadmap steps 26–28. "Remember me" keeps the sign-in token in the browser's local storage; without it, closing or reloading the tab signs out. Tokens last 30 minutes either way.
+So far it has sign-in and register screens and the home screen: your boards with their list and card counts, starred and recently opened boards, creating a board, and closed boards with reopen and delete. Opening a board shows its lists and card fronts (labels, done, due badge, description, comment and checklist counts, assignees) and keeps them live over the WebSocket: changes made anywhere appear without a reload, and after a lost connection it reconnects and reloads the board. Editors and owners can also change the board in place: add lists and cards one after another, rename lists (and, for the owner, the board) by clicking their names, drag lists and cards (or move a list from its menu), sort a list once, mark cards done, archive a done card in one click, and archive a list after a confirmation. Changes show at once; if the API refuses one, the board says why and reloads. Viewers and closed boards get none of these controls. Clicking a card opens it over its board, at its own address (`#card-<id>`, so it can be shared): rename it, write a description in Markdown, pick or create labels (and edit or delete them), set a due date, assign people, mark it done, move it to another list and position, and archive it; an archived card opens read-only, with Restore and Delete. Comments and the card's activity come in roadmap step 26b, checklists in step 28. "Remember me" keeps the sign-in token in the browser's local storage; without it, closing or reloading the tab signs out. Tokens last 30 minutes either way.
 
 ## Test
 
@@ -203,4 +203,5 @@ GitHub Actions runs the same checks on every pull request and every push to `mai
 23. Frontend home: board tiles, starred, recently opened, create, closed boards
 24. Frontend board view, reading: lists and card fronts, live over the WebSocket
 25. Frontend board view, editing: add, rename, drag, sort, mark done, archive
-26. Frontend: the rest of [`docs/build-plan.md`](docs/build-plan.md#frontend-build-order), steps 26–28
+26. Frontend card dialog: details (26a), then comments and activity (26b)
+27. Frontend: the rest of [`docs/build-plan.md`](docs/build-plan.md#frontend-build-order), steps 27–28

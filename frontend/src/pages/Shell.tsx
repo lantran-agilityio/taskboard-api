@@ -1,10 +1,9 @@
 import type { User } from "../api/auth";
 import type { Route } from "../routes";
-import { BoardPage } from "../board/BoardPage";
+import { BoardScreen } from "../board/BoardScreen";
 import { Home } from "./Home";
 
-// The signed-in frame: a top bar and the page for the current address. The
-// card page is a placeholder until roadmap step 26 builds the card dialog.
+// The signed-in frame: a top bar and the page for the current address.
 
 export function TopBar({ user, onSignOut }: { user: User; onSignOut: () => void }) {
   return (
@@ -35,33 +34,8 @@ export function Page({
     case "home":
       return <Home token={token} user={user} />;
     case "board":
-      // key: a different board starts from scratch (its own socket and data).
-      return <BoardPage key={route.id} boardId={route.id} token={token} />;
     case "card":
-      return (
-        <Placeholder title={`Card #${route.id}`} step={26}>
-          The card dialog: details, checklists, comments and activity.
-        </Placeholder>
-      );
+      // Same element for both: opening and closing a card keeps the board.
+      return <BoardScreen route={route} token={token} />;
   }
-}
-
-function Placeholder({
-  title,
-  step,
-  children,
-}: {
-  title: string;
-  step: number;
-  children: string;
-}) {
-  return (
-    <main className="page gutter">
-      <h1>{title}</h1>
-      <p className="muted">
-        Coming in roadmap step {step}: {children}
-      </p>
-      <a href="#home">← Boards</a>
-    </main>
-  );
 }

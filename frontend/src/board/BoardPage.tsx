@@ -5,6 +5,7 @@ import { reopenBoard, setStarred } from "../api/boards";
 import { StarIcon } from "../components/icons";
 import { InlineEdit } from "../components/InlineEdit";
 import { Avatar, type CardActions } from "./CardFront";
+import { CardDialog } from "./CardDialog";
 import { dropIndex, isNoMove, type Span } from "./dnd";
 import * as local from "./edits";
 import { AddListColumn, ListColumn, type Drag, type ListActions } from "./ListColumn";
@@ -12,8 +13,22 @@ import { ListMenu } from "./ListMenu";
 import type { BoardData, Card } from "./model";
 import { errorMessage, useBoard } from "./useBoard";
 
-/** The board's lists and cards, kept live over the WebSocket, and editable. */
-export function BoardPage({ boardId, token }: { boardId: number; token: string }) {
+/**
+ * The board's lists and cards, kept live over the WebSocket, and editable.
+ * With a cardId, that card is open as a dialog over the board.
+ */
+export function BoardPage({
+  boardId,
+  token,
+  cardId = null,
+  onCards,
+}: {
+  boardId: number;
+  token: string;
+  cardId?: number | null;
+  /** Told which cards are on screen, so opening one needs no lookup. */
+  onCards?: (boardId: number, ids: Set<number>) => void;
+}) {
   const { view, live, update, reload } = useBoard(boardId, token);
   const [actionError, setActionError] = useState<string | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -23,6 +38,15 @@ export function BoardPage({ boardId, token }: { boardId: number; token: string }
   );
   const [addingCardTo, setAddingCardTo] = useState<number | null>(null);
   const lanes = useRef<HTMLDivElement>(null);
+
+  const cardIds =
+    view.status === "ready"
+      ? view.data.lists.flatMap((list) => list.cards.map((card) => card.id)).join(",")
+      : "";
+  useEffect(() => {
+    if (view.status !== "ready") return;
+    onCards?.(boardId, new Set(cardIds ? cardIds.split(",").map(Number) : []));
+  }, [boardId, cardIds, onCards, view.status]);
 
   const boardName = view.status === "ready" ? view.data.board.name : null;
   useEffect(() => {
@@ -74,6 +98,20 @@ export function BoardPage({ boardId, token }: { boardId: number; token: string }
       setActionError(`Couldn't ${what}: ${errorMessage(error)}`);
       reload();
       return false;
+    }
+  }
+  /** Asks the API and returns its answer; on a refusal, says why and reloads. */
+  async function attempt<T>(
+    what: string,
+    request: () => Promise<T>,
+  ): Promise<T | null> {
+    setActionError(null);
+    try {
+      return await request();
+    } catch (error) {
+      setActionError(`Couldn't ${what}: ${errorMessage(error)}`);
+      reload();
+      return null;
     }
   }
 
@@ -298,6 +336,21 @@ export function BoardPage({ boardId, token }: { boardId: number; token: string }
           />
         )}
       </div>
+      {cardId !== null && (
+        <CardDialog
+          key={cardId}
+          cardId={cardId}
+          data={view.data}
+          token={token}
+          canEdit={canEdit}
+          change={change}
+          attempt={attempt}
+          update={update}
+          onClose={() => {
+            window.location.hash = `#board-${board.id}`;
+          }}
+        />
+      )}
       {menu && menuList && (
         <ListMenu
           list={menuList}

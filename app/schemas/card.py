@@ -61,6 +61,7 @@ class CardRead(BaseModel):
 
     id: int
     list_id: int
+    board_id: int
     title: str
     description: str | None
     position: int | None  # None while archived
