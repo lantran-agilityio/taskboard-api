@@ -26,6 +26,8 @@ export interface BoardHandle {
   update: (change: (data: BoardData) => BoardData) => void;
   /** Reloads the board from the API (after an edit the API refused). */
   reload: () => void;
+  /** Hears every event this board's socket receives; returns "stop listening". */
+  subscribe: (listener: (event: BoardEvent) => void) => () => void;
 }
 
 export function errorMessage(error: unknown): string {
@@ -43,6 +45,8 @@ export function useBoard(boardId: number, token: string): BoardHandle {
   const [live, setLive] = useState<SocketStatus>("connecting");
   // The current connection's load function, for reload() from the page.
   const loadRef = useRef<() => void>(() => {});
+  // Others interested in the board's events (an open card dialog).
+  const listeners = useRef(new Set<(event: BoardEvent) => void>());
 
   const update = useCallback(
     (change: (data: BoardData) => BoardData) =>
@@ -128,6 +132,7 @@ export function useBoard(boardId: number, token: string): BoardHandle {
           update((data) => applyEvent(data, event));
           runFollowUp(event);
         }
+        listeners.current.forEach((listener) => listener(event));
       },
       onGone: () => setView({ status: "gone" }),
       onUnauthorized: signOut,
@@ -145,5 +150,11 @@ export function useBoard(boardId: number, token: string): BoardHandle {
   }, [boardId, token, signOut, update]);
 
   const reload = useCallback(() => loadRef.current(), []);
-  return { view, live, update, reload };
+  const subscribe = useCallback((listener: (event: BoardEvent) => void) => {
+    listeners.current.add(listener);
+    return () => {
+      listeners.current.delete(listener);
+    };
+  }, []);
+  return { view, live, update, reload, subscribe };
 }

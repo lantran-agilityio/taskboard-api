@@ -101,6 +101,7 @@ export function BoardScreen({
       boardId={boardId}
       token={token}
       cardId={cardId}
+      commentId={route.name === "card" ? (route.commentId ?? null) : null}
       onCards={reportCards}
     />
   );

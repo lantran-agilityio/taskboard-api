@@ -1,23 +1,35 @@
 import { useEffect, useState } from "react";
 
-// Addresses are hash routes (#home, #board-12, #card-34), so the app works as
-// static files with no server-side routing.
+// Addresses are hash routes (#home, #board-12, #card-34, and #card-34-comment-5
+// for a link to one comment), so the app works as static files with no
+// server-side routing.
 
 export type Route =
-  { name: "home" } | { name: "board"; id: number } | { name: "card"; id: number };
+  | { name: "home" }
+  | { name: "board"; id: number }
+  | { name: "card"; id: number; commentId?: number };
 
-const PATTERN = /^#(board|card)-([1-9]\d*)$/;
+const BOARD = /^#board-([1-9]\d*)$/;
+const CARD = /^#card-([1-9]\d*)(?:-comment-([1-9]\d*))?$/;
 
 export function parseHash(hash: string): Route {
-  const match = PATTERN.exec(hash);
-  if (match) {
-    return { name: match[1] as "board" | "card", id: Number(match[2]) };
+  const board = BOARD.exec(hash);
+  if (board) return { name: "board", id: Number(board[1]) };
+  const card = CARD.exec(hash);
+  if (card) {
+    return card[2]
+      ? { name: "card", id: Number(card[1]), commentId: Number(card[2]) }
+      : { name: "card", id: Number(card[1]) };
   }
   return { name: "home" };
 }
 
 export function hashFor(route: Route): string {
-  return route.name === "home" ? "#home" : `#${route.name}-${route.id}`;
+  if (route.name === "home") return "#home";
+  if (route.name === "board") return `#board-${route.id}`;
+  return route.commentId
+    ? `#card-${route.id}-comment-${route.commentId}`
+    : `#card-${route.id}`;
 }
 
 export function useRoute(): Route {

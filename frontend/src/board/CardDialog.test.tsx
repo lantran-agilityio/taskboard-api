@@ -37,6 +37,12 @@ function serve(routes: Routes = {}, board: Partial<Board> = {}, start = lists())
     },
     "GET /boards/1/labels": { status: 200, body: LABELS },
     "GET /boards/1/members": { status: 200, body: MEMBERS },
+    // The comments and activity panel (step 26b), empty here.
+    "GET /cards/100/comments": { status: 200, body: { items: [], next_before: null } },
+    "GET /boards/1/activity?card_id=100": {
+      status: 200,
+      body: { items: [], next_before: null },
+    },
     ...routes,
   });
 }
@@ -168,7 +174,14 @@ describe("editing the card", () => {
     const field = dialog().getByRole("textbox", { name: "Description" });
     await user.clear(field);
     await user.type(field, "- one\n- two");
-    await user.click(dialog().getByRole("button", { name: "Save" }));
+    await user.click(
+      within(dialog().getByRole("region", { name: "Description" })).getByRole(
+        "button",
+        {
+          name: "Save",
+        },
+      ),
+    );
 
     expect(
       dialog()
@@ -187,7 +200,14 @@ describe("editing the card", () => {
 
     await user.click(dialog().getByRole("button", { name: "Edit" }));
     await user.clear(dialog().getByRole("textbox", { name: "Description" }));
-    await user.click(dialog().getByRole("button", { name: "Save" }));
+    await user.click(
+      within(dialog().getByRole("region", { name: "Description" })).getByRole(
+        "button",
+        {
+          name: "Save",
+        },
+      ),
+    );
 
     expect(bodiesOf(calls, "PATCH /cards/100")).toEqual([{ description: null }]);
     expect(
@@ -338,7 +358,11 @@ describe("labels", () => {
     const name = screen.getByLabelText("Name (optional)");
     await user.clear(name);
     await user.type(name, "Defect");
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(
+      within(screen.getByRole("dialog", { name: "Edit label" })).getByRole("button", {
+        name: "Save",
+      }),
+    );
     expect(bodiesOf(calls, "PATCH /labels/10")).toEqual([
       { name: "Defect", color: "red" },
     ]);
