@@ -8,6 +8,7 @@ import { Avatar, type CardActions } from "./CardFront";
 import { useSession } from "../auth/session";
 import { BoardMenu } from "./BoardMenu";
 import { CardDialog } from "./CardDialog";
+import { ShareDialog } from "./ShareDialog";
 import { dropIndex, isNoMove, type Span } from "./dnd";
 import * as local from "./edits";
 import { AddListColumn, ListColumn, type Drag, type ListActions } from "./ListColumn";
@@ -43,6 +44,7 @@ export function BoardPage({
   );
   const [addingCardTo, setAddingCardTo] = useState<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const { session } = useSession();
   const myId = session.status === "signedIn" ? session.user.id : 0;
   const lanes = useRef<HTMLDivElement>(null);
@@ -256,6 +258,9 @@ export function BoardPage({
             <Avatar key={member.user_id} member={member} />
           ))}
         </div>
+        <button type="button" className="btn" onClick={() => setShareOpen(true)}>
+          Share
+        </button>
         <button
           type="button"
           className="btn"
@@ -363,6 +368,20 @@ export function BoardPage({
           update={update}
           subscribe={subscribe}
           onClose={() => setMenuOpen(false)}
+        />
+      )}
+      {shareOpen && (
+        <ShareDialog
+          data={view.data}
+          token={token}
+          myId={myId}
+          change={change}
+          attempt={attempt}
+          update={update}
+          onClose={() => setShareOpen(false)}
+          onLeft={() => {
+            window.location.hash = "#home";
+          }}
         />
       )}
       {cardId !== null && (
