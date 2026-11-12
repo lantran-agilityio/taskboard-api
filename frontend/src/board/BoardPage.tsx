@@ -1,130 +1,28 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { getCard, getLabels, getMembers, getSnapshot } from "../api/boardView";
+import * as edit from "../api/boardEdit";
 import { reopenBoard, setStarred } from "../api/boards";
-import { ApiError } from "../api/client";
-import { useSession } from "../auth/session";
 import { StarIcon } from "../components/icons";
-import { Avatar, CardFront } from "./CardFront";
-import {
-  applyEvent,
-  followUp,
-  replaceCard,
-  type BoardData,
-  type BoardEvent,
-} from "./model";
-import { BoardSocket, type SocketStatus } from "./socket";
+import { InlineEdit } from "../components/InlineEdit";
+import { Avatar, type CardActions } from "./CardFront";
+import { dropIndex, isNoMove, type Span } from "./dnd";
+import * as local from "./edits";
+import { AddListColumn, ListColumn, type Drag, type ListActions } from "./ListColumn";
+import { ListMenu } from "./ListMenu";
+import type { BoardData, Card } from "./model";
+import { errorMessage, useBoard } from "./useBoard";
 
-type View =
-  | { status: "loading" }
-  | { status: "ready"; data: BoardData }
-  | { status: "missing" } // 404: no such board, or you're not on it
-  | { status: "gone" } // deleted, or you were removed, while you watched
-  | { status: "error"; message: string };
-
-function errorMessage(error: unknown): string {
-  return error instanceof ApiError ? error.message : "Something went wrong.";
-}
-
-/** The board's lists and cards, kept live over the WebSocket (read-only for now). */
+/** The board's lists and cards, kept live over the WebSocket, and editable. */
 export function BoardPage({ boardId, token }: { boardId: number; token: string }) {
-  const { signOut } = useSession();
-  const [view, setView] = useState<View>({ status: "loading" });
-  const [live, setLive] = useState<SocketStatus>("connecting");
+  const { view, live, update, reload } = useBoard(boardId, token);
   const [actionError, setActionError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    let loaded = false;
-    // Events that arrive while a load is in flight: the load may or may not
-    // include them, so they're applied again on top of it (applying an event
-    // twice gives the same board).
-    let loads = 0;
-    let pending: BoardEvent[] = [];
-
-    const update = (change: (data: BoardData) => BoardData) =>
-      setView((current) =>
-        current.status === "ready"
-          ? { status: "ready", data: change(current.data) }
-          : current,
-      );
-
-    async function refetchCard(cardId: number) {
-      try {
-        const card = await getCard(token, cardId);
-        if (!cancelled) update((data) => replaceCard(data, card));
-      } catch {
-        // Deleted or moved off the board since: its own event handles that.
-      }
-    }
-
-    function runFollowUp(event: BoardEvent) {
-      const next = followUp(event);
-      if (next?.kind === "card") void refetchCard(next.cardId);
-      if (next?.kind === "reload") void load();
-    }
-
-    async function load() {
-      loads += 1;
-      try {
-        const [snapshot, labels, members] = await Promise.all([
-          getSnapshot(token, boardId),
-          getLabels(token, boardId),
-          getMembers(token, boardId),
-        ]);
-        if (cancelled) return;
-        let data: BoardData = {
-          board: snapshot.board,
-          lists: snapshot.lists,
-          labels,
-          members,
-        };
-        const missed = pending;
-        for (const event of missed) data = applyEvent(data, event);
-        loaded = true;
-        setView({ status: "ready", data });
-        missed.forEach((event) => {
-          if (followUp(event)?.kind === "card") runFollowUp(event);
-        });
-      } catch (error) {
-        if (cancelled) return;
-        if (error instanceof ApiError && error.status === 404) {
-          setView({ status: "missing" });
-        } else if (!loaded) {
-          setView({ status: "error", message: errorMessage(error) });
-        }
-        // Once loaded, a failed reload keeps the board on screen.
-      } finally {
-        loads -= 1;
-        if (loads === 0) pending = [];
-      }
-    }
-
-    const socket = new BoardSocket({
-      boardId,
-      token,
-      onReady: () => void load(),
-      onEvent: (event) => {
-        if (loads > 0) pending.push(event);
-        if (loaded) {
-          update((data) => applyEvent(data, event));
-          runFollowUp(event);
-        }
-      },
-      onGone: () => setView({ status: "gone" }),
-      onUnauthorized: signOut,
-      onStatus: (status) => {
-        setLive(status);
-        // If the socket can't connect at all, still show the board.
-        if (status === "offline" && !loaded && loads === 0) void load();
-      },
-    });
-    socket.start();
-    return () => {
-      cancelled = true;
-      socket.stop();
-    };
-  }, [boardId, token, signOut]);
+  const [drag, setDrag] = useState<Drag | null>(null);
+  const [listDropAt, setListDropAt] = useState<number | null>(null);
+  const [menu, setMenu] = useState<{ listId: number; anchor: HTMLElement } | null>(
+    null,
+  );
+  const [addingCardTo, setAddingCardTo] = useState<number | null>(null);
+  const lanes = useRef<HTMLDivElement>(null);
 
   const boardName = view.status === "ready" ? view.data.board.name : null;
   useEffect(() => {
@@ -134,9 +32,7 @@ export function BoardPage({ boardId, token }: { boardId: number; token: string }
     };
   }, [boardName]);
 
-  if (view.status === "loading") {
-    return <Message title="Loading the board…" busy />;
-  }
+  if (view.status === "loading") return <Message title="Loading the board…" busy />;
   if (view.status === "missing") {
     return (
       <Message title="Board not found">It doesn't exist, or you're not on it.</Message>
@@ -154,38 +50,120 @@ export function BoardPage({ boardId, token }: { boardId: number; token: string }
   }
 
   const { board, lists, labels, members } = view.data;
-  const setBoard = (change: Partial<BoardData["board"]>) =>
-    setView((current) =>
-      current.status === "ready"
-        ? {
-            status: "ready",
-            data: { ...current.data, board: { ...current.data.board, ...change } },
-          }
-        : current,
-    );
+  // Viewers only read, and a closed board is read-only for everyone (R-BOARD-06).
+  const canEdit = board.role !== "viewer" && !board.closed_at;
+  const canRename = board.role === "owner" && !board.closed_at;
 
-  async function toggleStar() {
-    const starred = !board.starred;
+  /**
+   * Shows a change at once, then asks the API. If the API refuses, says why
+   * and reloads the board, which puts back whatever the API really has.
+   */
+  async function change<T>(
+    what: string,
+    show: ((data: BoardData) => BoardData) | null,
+    request: () => Promise<T>,
+    confirm?: (result: T) => (data: BoardData) => BoardData,
+  ): Promise<boolean> {
     setActionError(null);
-    setBoard({ starred });
+    if (show) update(show);
     try {
-      await setStarred(token, board.id, starred);
+      const result = await request();
+      if (confirm) update(confirm(result));
+      return true;
     } catch (error) {
-      setBoard({ starred: !starred });
-      setActionError(
-        `Couldn't ${starred ? "star" : "unstar"} the board: ${errorMessage(error)}`,
-      );
+      setActionError(`Couldn't ${what}: ${errorMessage(error)}`);
+      reload();
+      return false;
     }
   }
 
-  async function reopen() {
-    setActionError(null);
-    try {
-      const reopened = await reopenBoard(token, board.id);
-      setBoard({ closed_at: reopened.closed_at });
-    } catch (error) {
-      setActionError(`Couldn't reopen the board: ${errorMessage(error)}`);
-    }
+  const cardActions: CardActions = {
+    onToggleDone: (card: Card) =>
+      void change(
+        card.due_complete ? "mark the card not done" : "mark the card done",
+        (data) => local.changeCard(data, card.id, { due_complete: !card.due_complete }),
+        () => edit.updateCard(token, card.id, { due_complete: !card.due_complete }),
+      ),
+    // No confirmation for cards (R-CARD-08): they're easy to restore.
+    onArchive: (card: Card) =>
+      void change(
+        "archive the card",
+        (data) => local.removeCard(data, card.id),
+        () => edit.archiveCard(token, card.id),
+      ),
+    onDragStart: (card: Card) => {
+      const fromList = lists.find((list) => list.cards.some((c) => c.id === card.id));
+      if (!fromList) return;
+      const fromIndex = fromList.cards.findIndex((c) => c.id === card.id);
+      setDrag({ kind: "card", id: card.id, fromList: fromList.id, fromIndex });
+    },
+    onDragEnd: () => {
+      setDrag(null);
+      setListDropAt(null);
+    },
+  };
+
+  const listActions: ListActions = {
+    ...cardActions,
+    onRename: (listId, name) =>
+      void change(
+        "rename the list",
+        (data) => local.renameList(data, listId, name),
+        () => edit.updateList(token, listId, { name }),
+      ),
+    onOpenMenu: (list, anchor) => setMenu({ listId: list.id, anchor }),
+    onAddCard: (listId, title) =>
+      change(
+        "add the card",
+        null,
+        () => edit.createCard(token, listId, title),
+        (card) => (data) => local.addCard(data, card),
+      ),
+    onDropCard: (listId, index) => {
+      if (drag?.kind !== "card") return;
+      const { id, fromList, fromIndex } = drag;
+      setDrag(null);
+      if (isNoMove(fromList, fromIndex, listId, index)) return;
+      void change(
+        "move the card",
+        (data) => local.moveCard(data, id, listId, index),
+        () => edit.updateCard(token, id, { list_id: listId, position: index }),
+      );
+    },
+    onListDragStart: (list) =>
+      setDrag({ kind: "list", id: list.id, fromIndex: lists.indexOf(list) }),
+  };
+
+  function moveList(listId: number, position: number) {
+    void change(
+      "move the list",
+      (data) => local.moveList(data, listId, position),
+      () => edit.updateList(token, listId, { position }),
+    );
+  }
+
+  /** Where a dragged list would land, among the other lists. */
+  function listIndexAt(clientX: number, draggedId: number): number {
+    const others: Span[] = [];
+    lanes.current?.querySelectorAll<HTMLElement>("[data-list]").forEach((element) => {
+      if (Number(element.dataset.list) === draggedId) return;
+      const box = element.getBoundingClientRect();
+      others.push({ start: box.left, size: box.width });
+    });
+    return dropIndex(others, clientX);
+  }
+
+  const listDrag = drag?.kind === "list" ? drag : null;
+  const otherLists = lists.filter((list) => list.id !== listDrag?.id);
+  const menuList = menu ? lists.find((list) => list.id === menu.listId) : undefined;
+
+  async function toggleStar() {
+    const starred = !board.starred;
+    await change(
+      starred ? "star the board" : "unstar the board",
+      (data) => ({ ...data, board: { ...data.board, starred } }),
+      () => setStarred(token, board.id, starred),
+    );
   }
 
   return (
@@ -194,7 +172,22 @@ export function BoardPage({ boardId, token }: { boardId: number; token: string }
         <a className="ghost" href="#home">
           ← Boards
         </a>
-        <h1 className="board-title">{board.name}</h1>
+        <h1 className="board-heading">
+          <InlineEdit
+            value={board.name}
+            label="Board title"
+            className="board-title"
+            inputClassName="title-input"
+            editable={canRename}
+            onSave={(name) =>
+              void change(
+                "rename the board",
+                (data) => ({ ...data, board: { ...data.board, name } }),
+                () => edit.renameBoard(token, board.id, name),
+              )
+            }
+          />
+        </h1>
         <button
           type="button"
           className={board.starred ? "star on" : "star"}
@@ -222,7 +215,21 @@ export function BoardPage({ boardId, token }: { boardId: number; token: string }
         <div className="banner gutter" role="status">
           <span>This board is closed, so it's read-only.</span>
           {board.role === "owner" ? (
-            <button type="button" className="btn sm" onClick={reopen}>
+            <button
+              type="button"
+              className="btn sm"
+              onClick={() =>
+                void change(
+                  "reopen the board",
+                  null,
+                  () => reopenBoard(token, board.id),
+                  (reopened) => (data) => ({
+                    ...data,
+                    board: { ...data.board, closed_at: reopened.closed_at },
+                  }),
+                )
+              }
+            >
               Reopen board
             </button>
           ) : (
@@ -235,29 +242,88 @@ export function BoardPage({ boardId, token }: { boardId: number; token: string }
           {actionError}
         </p>
       )}
-      <div className="lanes gutter">
-        {lists.length === 0 && <p className="muted">This board has no lists yet.</p>}
+      <div
+        ref={lanes}
+        className={
+          listDrag && listDropAt !== null && listDropAt >= otherLists.length
+            ? "lanes gutter drop-end"
+            : "lanes gutter"
+        }
+        onDragOver={(event) => {
+          if (!listDrag) return;
+          event.preventDefault(); // allows the drop
+          event.dataTransfer.dropEffect = "move";
+          setListDropAt(listIndexAt(event.clientX, listDrag.id));
+        }}
+        onDrop={(event) => {
+          if (!listDrag) return;
+          event.preventDefault();
+          const index = listIndexAt(event.clientX, listDrag.id);
+          setDrag(null);
+          setListDropAt(null);
+          if (index !== listDrag.fromIndex) moveList(listDrag.id, index);
+        }}
+      >
+        {lists.length === 0 && !canEdit && (
+          <p className="muted">This board has no lists yet.</p>
+        )}
         {lists.map((list) => (
-          <section key={list.id} className="list" aria-label={list.name}>
-            <header className="list-head">
-              <h2 className="list-name">{list.name}</h2>
-              <span className="count" title={`${list.cards.length} cards`}>
-                {list.cards.length}
-              </span>
-            </header>
-            <div className="cards">
-              {list.cards.map((card) => (
-                <CardFront
-                  key={card.id}
-                  card={card}
-                  labels={labels}
-                  members={members}
-                />
-              ))}
-            </div>
-          </section>
+          <ListColumn
+            key={list.id}
+            list={list}
+            labels={labels}
+            members={members}
+            actions={canEdit ? listActions : undefined}
+            drag={drag}
+            dropListBefore={
+              listDrag !== null &&
+              listDropAt !== null &&
+              otherLists[listDropAt]?.id === list.id
+            }
+            addingCard={addingCardTo === list.id}
+            onAddingCard={(open) => setAddingCardTo(open ? list.id : null)}
+          />
         ))}
+        {canEdit && (
+          <AddListColumn
+            first={lists.length === 0}
+            onAdd={(name) =>
+              change(
+                "add the list",
+                null,
+                () => edit.createList(token, board.id, name),
+                (list) => (data) => local.addList(data, list),
+              )
+            }
+          />
+        )}
       </div>
+      {menu && menuList && (
+        <ListMenu
+          list={menuList}
+          position={lists.indexOf(menuList)}
+          listCount={lists.length}
+          anchor={menu.anchor}
+          onClose={() => setMenu(null)}
+          onAddCard={() => setAddingCardTo(menuList.id)}
+          onMove={(position) => moveList(menuList.id, position)}
+          onSort={(by) =>
+            void change(
+              "sort the cards",
+              null,
+              () => edit.sortList(token, menuList.id, by),
+              (cards) => (data) => local.setCards(data, menuList.id, cards),
+            )
+          }
+          onArchive={() =>
+            void change(
+              "archive the list",
+              (data) => local.removeList(data, menuList.id),
+              () => edit.archiveList(token, menuList.id),
+            )
+          }
+        />
+      )}
     </div>
   );
 }

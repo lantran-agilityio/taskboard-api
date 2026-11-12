@@ -829,3 +829,232 @@ textarea.field {
 .live.offline {
   color: var(--danger);
 }
+
+/* Board editing: from the prototype */
+.pop {
+  position: fixed;
+  z-index: 60;
+  top: 8px;
+  left: 8px;
+  width: 304px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+.pop-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pop-head h3 {
+  flex: 1;
+  font: 600 15px/1.2 var(--f-display);
+  text-align: center;
+}
+.menu {
+  display: grid;
+  gap: 2px;
+}
+.menu button {
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  padding: 7px 8px;
+}
+.menu button:hover {
+  background: color-mix(in oklab, var(--ink) 8%, transparent);
+}
+.menu button.danger-text {
+  color: var(--danger);
+}
+.menu hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 4px 0;
+  width: 100%;
+}
+.blk {
+  display: grid;
+  gap: 10px;
+}
+/* The title link covers the whole card; the done toggle and archive button sit above it. */
+.card-link {
+  color: inherit;
+  text-decoration: none;
+}
+.card-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9px;
+}
+.card-link:focus-visible {
+  outline: none;
+}
+.card:has(.card-link:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.card .done-tog,
+.card .quick-arch {
+  position: relative;
+  z-index: 1;
+}
+.card .quick-arch {
+  position: absolute;
+}
+.list-head[draggable="true"] .list-name {
+  cursor: pointer;
+}
+.board-heading {
+  margin: 0;
+}
+.title-input {
+  font: 700 22px/1.2 var(--f-display);
+  letter-spacing: -0.015em;
+  border: 0;
+  border-radius: 6px;
+  padding: 2px 6px;
+  margin-left: -6px;
+  background: var(--surface);
+  outline: 2px solid var(--accent);
+  min-width: 0;
+  width: min(420px, 70vw);
+}
+.lanes.drop-end::after {
+  content: "";
+  flex: 0 0 4px;
+  align-self: stretch;
+  background: var(--accent);
+  border-radius: 2px;
+}
+.list.dragging {
+  opacity: 0.45;
+}
+.list.drop-before {
+  box-shadow: -8px 0 0 -4px var(--accent);
+}
+.list-head[draggable="true"] {
+  cursor: grab;
+}
+.list-name:not([disabled]):hover {
+  background: color-mix(in oklab, var(--ink) 8%, transparent);
+}
+.list-input {
+  flex: 1;
+  font: 600 15px/1.25 var(--f-display);
+  border: 0;
+  border-radius: 6px;
+  padding: 4px;
+  outline: 2px solid var(--accent);
+  background: var(--surface);
+  min-width: 0;
+}
+.cards.drop-end::after {
+  content: "";
+  height: 4px;
+  background: var(--accent);
+  border-radius: 2px;
+}
+.add-card {
+  text-align: left;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  padding: 7px 8px;
+  border-radius: 8px;
+  font-weight: 500;
+}
+.add-card:hover {
+  background: color-mix(in oklab, var(--ink) 8%, transparent);
+  color: var(--ink);
+}
+.list-add {
+  flex: 0 0 276px;
+}
+.list-add > .add-list-btn {
+  width: 100%;
+  text-align: left;
+  border: 1.5px dashed var(--line);
+  background: none;
+  border-radius: 12px;
+  padding: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.list-add > .add-list-btn:hover {
+  color: var(--ink);
+  border-color: var(--muted);
+}
+.mini-form {
+  display: grid;
+  gap: 8px;
+  background: var(--lane);
+  border-radius: 12px;
+  padding: 8px;
+}
+.list .mini-form {
+  padding: 0;
+  background: none;
+}
+.card.dragging {
+  opacity: 0.4;
+}
+.card.drop-before {
+  box-shadow:
+    0 -6px 0 -2px var(--accent),
+    var(--shadow);
+}
+.card:not(.is-done) .done-tog {
+  opacity: 0;
+  width: 0;
+  margin-right: -6px;
+  border-width: 0;
+  transition:
+    width 0.12s,
+    opacity 0.12s;
+}
+.card:hover .done-tog,
+.card:focus-within .done-tog {
+  opacity: 1;
+  width: 18px;
+  margin-right: 0;
+  border-width: 1.5px;
+}
+@media (hover: none) {
+  .card:not(.is-done) .done-tog {
+    opacity: 1;
+    width: 18px;
+    margin-right: 0;
+    border-width: 1.5px;
+  }
+}
+.quick-arch {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 6px;
+  padding: 3px;
+  line-height: 0;
+  color: var(--muted);
+  opacity: 0;
+}
+.card:hover .quick-arch,
+.card:focus-within .quick-arch {
+  opacity: 1;
+}
+@media (hover: none) {
+  .quick-arch {
+    opacity: 1;
+  }
+}

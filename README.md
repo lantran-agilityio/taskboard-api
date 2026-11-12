@@ -164,7 +164,7 @@ npm ci
 npm run dev        # http://localhost:5173, forwards /api to the API on port 8000
 ```
 
-So far it has sign-in and register screens and the home screen: your boards with their list and card counts, starred and recently opened boards, creating a board, and closed boards with reopen and delete. Opening a board shows its lists and card fronts (labels, done, due badge, description, comment and checklist counts, assignees) and keeps them live over the WebSocket: changes made anywhere appear without a reload, and after a lost connection it reconnects and reloads the board. Editing on the board and the card page come in roadmap steps 25–28. "Remember me" keeps the sign-in token in the browser's local storage; without it, closing or reloading the tab signs out. Tokens last 30 minutes either way.
+So far it has sign-in and register screens and the home screen: your boards with their list and card counts, starred and recently opened boards, creating a board, and closed boards with reopen and delete. Opening a board shows its lists and card fronts (labels, done, due badge, description, comment and checklist counts, assignees) and keeps them live over the WebSocket: changes made anywhere appear without a reload, and after a lost connection it reconnects and reloads the board. Editors and owners can also change the board in place: add lists and cards one after another, rename lists (and, for the owner, the board) by clicking their names, drag lists and cards (or move a list from its menu), sort a list once, mark cards done, archive a done card in one click, and archive a list after a confirmation. Changes show at once; if the API refuses one, the board says why and reloads. Viewers and closed boards get none of these controls. The card page comes in roadmap steps 26–28. "Remember me" keeps the sign-in token in the browser's local storage; without it, closing or reloading the tab signs out. Tokens last 30 minutes either way.
 
 ## Test
 
@@ -202,4 +202,5 @@ GitHub Actions runs the same checks on every pull request and every push to `mai
 22. Frontend shell and sign-in (Vite, React, TypeScript in [`frontend/`](frontend/))
 23. Frontend home: board tiles, starred, recently opened, create, closed boards
 24. Frontend board view, reading: lists and card fronts, live over the WebSocket
-25. Frontend: the rest of [`docs/build-plan.md`](docs/build-plan.md#frontend-build-order), steps 25–28
+25. Frontend board view, editing: add, rename, drag, sort, mark done, archive
+26. Frontend: the rest of [`docs/build-plan.md`](docs/build-plan.md#frontend-build-order), steps 26–28

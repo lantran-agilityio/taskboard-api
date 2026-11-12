@@ -65,3 +65,16 @@ export const TickboxIcon = () => (
     <path d="M8 12l3 3 5-6" />
   </Icon>
 );
+export const ArchiveIcon = () => (
+  <Icon size={14}>
+    <rect x="3" y="4" width="18" height="5" rx="1" />
+    <path d="M5 9v10h14V9M10 13h4" />
+  </Icon>
+);
+export const DotsIcon = () => (
+  <Icon size={16}>
+    <circle cx="5" cy="12" r="1.2" />
+    <circle cx="12" cy="12" r="1.2" />
+    <circle cx="19" cy="12" r="1.2" />
+  </Icon>
+);
