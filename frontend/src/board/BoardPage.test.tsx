@@ -64,8 +64,8 @@ function lane(name: string) {
 
 function titlesIn(name: string): string[] {
   return lane(name)
-    .queryAllByRole("link")
-    .map((link) => link.querySelector(".card-title")?.textContent ?? "");
+    .queryAllByRole("article")
+    .map((card) => card.getAttribute("aria-label") ?? "");
 }
 
 beforeEach(() => {
@@ -91,8 +91,11 @@ describe("the board page", () => {
     serve();
     await openBoard();
 
-    const brief = await screen.findByRole("link", { name: /Write brief/ });
-    expect(brief).toHaveAttribute("href", "#card-100");
+    const brief = await screen.findByRole("article", { name: "Write brief" });
+    expect(within(brief).getByRole("link", { name: "Write brief" })).toHaveAttribute(
+      "href",
+      "#card-100",
+    );
     expect(within(brief).getByText("Bug")).toBeInTheDocument();
     expect(within(brief).getByText("Overdue")).toBeInTheDocument();
     expect(
@@ -105,8 +108,10 @@ describe("the board page", () => {
       within(brief).getByRole("img", { name: "bob@example.com" }),
     ).toHaveTextContent("BO");
 
-    const venue = screen.getByRole("link", { name: /Book venue/ });
-    expect(within(venue).getByRole("img", { name: "Done" })).toBeInTheDocument();
+    const venue = screen.getByRole("article", { name: "Book venue" });
+    expect(
+      within(venue).getByRole("button", { name: "Mark not done" }),
+    ).toHaveAttribute("aria-pressed", "true");
     expect(within(venue).getByText("Complete")).toBeInTheDocument();
   });
 
@@ -151,7 +156,7 @@ describe("the board page", () => {
       ws.receive(event("comment.created", { comment: { id: 5, card_id: 101 } })),
     );
 
-    const venue = screen.getByRole("link", { name: /Book venue/ });
+    const venue = screen.getByRole("article", { name: "Book venue" });
     expect(await within(venue).findByTitle("1 comments")).toBeInTheDocument();
     expect(calls.map((call) => call.key)).toContain("GET /cards/101");
   });

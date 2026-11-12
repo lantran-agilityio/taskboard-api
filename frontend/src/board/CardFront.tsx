@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 
 import {
+  ArchiveIcon,
   BubbleIcon,
   CheckIcon,
   ClockIcon,
@@ -44,15 +45,33 @@ function shortDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-/** A card's summary on the board (R-CARD-02): it opens the card at #card-<id>. */
+export interface CardActions {
+  onToggleDone: (card: Card) => void;
+  onArchive: (card: Card) => void;
+  onDragStart: (card: Card) => void;
+  onDragEnd: () => void;
+}
+
+/**
+ * A card's summary on the board (R-CARD-02). Its title links to #card-<id>,
+ * and the link covers the whole card (CSS), so the done toggle and archive
+ * buttons can sit on it without being inside the link.
+ */
 export function CardFront({
   card,
   labels,
   members,
+  actions,
+  dragging = false,
+  dropBefore = false,
 }: {
   card: Card;
   labels: Label[];
   members: Member[];
+  /** Given when you may edit the board; without them the card is read-only. */
+  actions?: CardActions;
+  dragging?: boolean;
+  dropBefore?: boolean;
 }) {
   const cardLabels = card.label_ids
     .map((id) => labels.find((label) => label.id === id))
@@ -64,9 +83,29 @@ export function CardFront({
   const due = dueState(card);
 
   return (
-    <a
-      className={card.due_complete ? "card is-done" : "card"}
-      href={`#card-${card.id}`}
+    <article
+      className={[
+        "card",
+        card.due_complete && "is-done",
+        dragging && "dragging",
+        dropBefore && "drop-before",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      aria-label={card.title}
+      data-card={card.id}
+      draggable={actions ? true : undefined}
+      onDragStart={
+        actions
+          ? (event) => {
+              event.dataTransfer.effectAllowed = "move";
+              // Firefox starts a drag only when some data is set.
+              event.dataTransfer.setData("text/plain", card.title);
+              actions.onDragStart(card);
+            }
+          : undefined
+      }
+      onDragEnd={actions?.onDragEnd}
     >
       {cardLabels.length > 0 && (
         <div className="card-lbls">
@@ -83,12 +122,31 @@ export function CardFront({
         </div>
       )}
       <div className="card-title-row">
-        {card.due_complete && (
-          <span className="done-tog on" role="img" aria-label="Done">
+        {actions ? (
+          <button
+            type="button"
+            className={card.due_complete ? "done-tog on" : "done-tog"}
+            aria-pressed={card.due_complete}
+            aria-label={card.due_complete ? "Mark not done" : "Mark done"}
+            onClick={() => actions.onToggleDone(card)}
+          >
             <CheckIcon />
-          </span>
+          </button>
+        ) : (
+          card.due_complete && (
+            <span className="done-tog on" role="img" aria-label="Done">
+              <CheckIcon />
+            </span>
+          )
         )}
-        <span className="card-title">{card.title}</span>
+        <a
+          className="card-title card-link"
+          href={`#card-${card.id}`}
+          // Dragging starts on the card, not the link (whose drag carries its URL).
+          draggable={false}
+        >
+          {card.title}
+        </a>
       </div>
       <div className="badges">
         {due && card.due_at && (
@@ -129,6 +187,17 @@ export function CardFront({
           </span>
         )}
       </div>
-    </a>
+      {actions && card.due_complete && (
+        <button
+          type="button"
+          className="quick-arch"
+          title="Archive"
+          aria-label="Archive this card"
+          onClick={() => actions.onArchive(card)}
+        >
+          <ArchiveIcon />
+        </button>
+      )}
+    </article>
   );
 }
