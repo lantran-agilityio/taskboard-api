@@ -21,7 +21,12 @@ import {
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Markdown } from "../components/Markdown";
 import { timeAgo } from "../format";
-import { describe, previousStates, type Context } from "./activityText";
+import {
+  describe,
+  listsWithHistory,
+  previousStates,
+  type Context,
+} from "./activityText";
 import { Avatar } from "./CardFront";
 import type { BoardEvent, Member } from "./model";
 
@@ -304,6 +309,11 @@ export function CardFeed({
     return edges.length ? Math.max(...edges) : -Infinity;
   })();
   const states = previousStates(activity?.items ?? []);
+  // Lists archived since are named from the history itself.
+  const historyContext = {
+    ...context,
+    lists: listsWithHistory(context.lists, activity?.items ?? []),
+  };
   const feed = [
     ...(comments?.items ?? []).map((comment) => ({
       kind: "comment" as const,
@@ -490,7 +500,11 @@ export function CardFeed({
                       ? "You"
                       : author(item.entry.actor_id).email}
                   </b>{" "}
-                  {describe(item.entry, states.get(item.entry.id) ?? null, context)}
+                  {describe(
+                    item.entry,
+                    states.get(item.entry.id) ?? null,
+                    historyContext,
+                  )}
                   <time
                     dateTime={item.entry.created_at}
                     title={new Date(item.entry.created_at).toLocaleString()}
