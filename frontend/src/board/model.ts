@@ -22,6 +22,7 @@ export interface Member {
 export interface Card {
   id: number;
   list_id: number;
+  board_id: number;
   title: string;
   description: string | null;
   position: number | null;

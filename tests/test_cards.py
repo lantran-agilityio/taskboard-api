@@ -1139,3 +1139,15 @@ def test_checklist_counts_follow_items(client: TestClient) -> None:
     assert counts(snapshot["lists"][0]["cards"][0]) == (1, 2)
     client.delete(f"/checklists/{second['id']}")
     assert counts(client.get(f"/cards/{card['id']}").json()) == (0, 1)
+
+
+def test_card_carries_its_board_id(client: TestClient) -> None:
+    board = create_board(client)
+    board_list = create_list(client, board["id"])
+    card = create_card(client, board_list["id"])
+
+    assert card["board_id"] == board["id"]
+    assert client.get(f"/cards/{card['id']}").json()["board_id"] == board["id"]
+    assert cards_in(client, board_list["id"])[0]["board_id"] == board["id"]
+    snapshot = client.get(f"/boards/{board['id']}/snapshot").json()
+    assert snapshot["lists"][0]["cards"][0]["board_id"] == board["id"]

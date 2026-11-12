@@ -104,6 +104,13 @@ class Card(Base):
         """Archived, or in an archived list: read-only until restored."""
         return self.is_archived or self.board_list.is_archived
 
+    # Read by CardRead, so a card alone says which board it's on (a link to
+    # #card-<id> opens it over its board). The list is already loaded wherever
+    # cards are read, so this costs no query.
+    @property
+    def board_id(self) -> int:
+        return self.board_list.board_id
+
     # Read by CardRead: cards carry ids, and clients look the rest up in the
     # board's labels and members.
     @property
