@@ -10,17 +10,17 @@ These settle the six design questions from `requirements.md` and the choices the
 
 | # | Question | Decision | Why |
 | --- | --- | --- | --- |
-| D1 | Where do restored lists and cards go? | Back to their **original position** (clamped to the end if the list is now shorter). The API remembers the position at archive time. | It's what the product does (R-LIST-07, confirmed), and it's what a user expects from "undo archive". |
+| D1 | Where do restored lists and cards go? | Back to their **original position** (clamped to the end if the list is now shorter). The API remembers the position at archive time. | It's what the product does (R-LIST-07, confirmed), and it's what a user expects from "undo archive". *Step 31:* the product puts it back beside its old neighbours rather than at its old index; the two differ only when other items moved meanwhile. Kept as is: the index is simple to explain and already built. |
 | D2 | Delete directly, or only after archiving/closing? | **The frontend** offers delete only for archived lists and cards and closed boards. **The API** keeps direct delete. | It's a UI safety rail. The API stays simple for scripts and tests, and its role checks still apply. |
 | D3 | Does deleting a card erase its history? | **No.** The board log keeps its "deleted" entry with the card's title. *Prototype update:* stop erasing entries. | A log that loses entries can't explain what happened. The API already works this way. |
 | D4 | Empty rename | **The frontend** puts the old name back without calling the API. **The API** keeps its 422 for an empty name. | Both behaviours stay correct, and the user never sees an error for clearing a field. |
-| D5 | Roles | **Keep the API's model:** the product's "admin" is the API's **owner** (exactly one), "member" is **editor**, and **viewer** is the read-only role. Several admins (R-MEMBER-05, unconfirmed) is out of scope. Invites are by **email** of a registered user. *Prototype update:* rename the roles; drop the admin choice when inviting; invite by email only. | One owner keeps the permission rules (`app/services/permissions.py`) and every role test as they are. |
+| D5 | Roles | **Keep the API's model:** the product's "admin" is the API's **owner** (exactly one), "member" is **editor**, and **viewer** is the read-only role (the product's observer, R-MEMBER-07). **Several admins (R-MEMBER-05) stays out of scope** (reaffirmed in step 31, now that it's confirmed). Only the owner invites, changes roles and removes people, so the product's settings for who may comment and invite (R-MEMBER-09) are out of scope too. Invites are by **email** of a registered user. *Prototype update:* rename the roles; drop the admin choice when inviting; invite by email only. | One owner keeps the permission rules (`app/services/permissions.py`) and every role test as they are. Step 31 confirmed the rest already matches: the owner deletes others' comments but can't edit them, viewers are read-only, and anyone but the last admin (here: the owner) can leave. |
 | D6 | Labels | **Name becomes optional** (empty allowed). **Colour stays required, from the API's 6.** A new board gets **six unnamed labels**, one per colour. *Prototype update:* drop teal, grey and "no colour". | The defaults are confirmed (R-LABEL-01) and need optional names. A colourless label and 30 shades are polish; they'd cost a Postgres enum migration for little. |
 | D7 | Closed boards | **Add a closed state:** `closed_at` on boards. The owner closes and reopens. A closed board is read-only for everyone (writes return 422, like a frozen card). `GET /boards` leaves closed boards out unless `?closed=true`. | Confirmed (R-BOARD-06/07). 422 matches the existing "frozen" rule, and CLAUDE.md asks for no new status codes. |
 | D8 | "Done" | **Done is `due_complete`.** The frontend calls it done and lets it be set with no due date. | One flag, as observed (R-CARD-05). Step 20 adds a test that `due_complete` works without `due_at`. |
 | D9 | Card numbers in addresses | **Use the card's `id`** in the frontend's address (`#card-<id>`). There is no per-board number. *Prototype update:* show `#<id>`. | The number is cosmetic. A per-board counter would need a column, a sequence per board and a migration. |
-| D10 | Comments on archived cards | **Not allowed** (the API's 422 stays). | It matches the frozen-card rule. The product's behaviour here is unconfirmed. |
-| D11 | Start dates, checklist item assignees and dates | **Start dates are deferred.** Item assignees and due dates are an optional last part of step 21. | Both are unconfirmed (R-DATE-03, R-CHECK-05). |
+| D10 | Comments on archived cards | **Not allowed** (the API's 422 stays). | It matches the frozen-card rule. Step 31 found the product does allow them (R-CARD-08), so this is now a deliberate difference: an archived card stays fully read-only. |
+| D11 | Start dates, checklist item assignees and dates | **Both move to step 32.** Start dates (R-DATE-03): a date with no time, allowed without a due date, never after the due date. Item assignees and due dates (R-CHECK-05). | Step 21 left both out while they were unconfirmed. Step 31 confirmed them (item assignees and dates are a paid feature in the product), so they're now ordinary requirements, built after the core screens. |
 | D12 | Frontend stack | **Approved (2026-11-11):** a separate `frontend/` app (Vite, React, TypeScript) that talks to the API over HTTP and the WebSocket, with its own CI job. In development Vite proxies `/api` to the API, so the API needs no CORS. | It's a common, well-documented stack, and it keeps the API and the UI testable on their own. |
 
 ## Coverage
@@ -45,6 +45,9 @@ This table is the plan as written before steps 16–21; those steps closed every
 | R-MEMBER-04 At least one admin | The owner can't be changed or removed (422) | ✓ | | — |
 | R-MEMBER-05 Several admins | — | — | Out of scope (D5) | — |
 | R-MEMBER-06 Leave a board | `DELETE /boards/{id}/members/{me}` | ✓ | | — |
+| R-MEMBER-07 Observer role *(added in step 31)* | `viewer` role | ✓ | Observer = viewer (D5) | — |
+| R-MEMBER-08 Change roles and remove people *(added in step 31)* | `PATCH`/`DELETE /boards/{id}/members/{user_id}` (owner) | ✓ | Owner only (D5) | — |
+| R-MEMBER-09 Who may comment and invite *(added in step 31)* | — | — | Out of scope (D5) | — |
 | R-LIST-01 Add lists quickly | `POST /boards/{id}/lists` (goes to the end) | ✓ | | — |
 | R-LIST-02 Rename in place | `PATCH /lists/{id}` `name` | ✓ | An empty name is handled in the UI (D4) | — |
 | R-LIST-03 Reorder lists | `PATCH /lists/{id}` `position` (0-based) | ✓ | The UI shows positions from 1 | — |
@@ -71,12 +74,12 @@ This table is the plan as written before steps 16–21; those steps closed every
 | R-LABEL-05 Delete a label | `DELETE /labels/{id}` (removed from cards) | ✓ | | — |
 | R-DATE-01 Set a due date | `PATCH /cards/{id}` `due_at` | ✓ | | — |
 | R-DATE-02 Due state | `due_at`, `due_complete` | ✓ | Overdue, soon and complete are worked out client-side | client |
-| R-DATE-03 Start date | — | — | Deferred (D11) | — |
+| R-DATE-03 Start date | — | ✗ | `start_at` on cards (D11) | 32 |
 | R-CHECK-01 Add a checklist | — | ✗ | Checklists | 21 |
 | R-CHECK-02 Add and tick items | — | ✗ | Checklists | 21 |
 | R-CHECK-03 Hide ticked items | — | ✗ | Client-side once 21 exists | 21 |
 | R-CHECK-04 Delete a checklist | — | ✗ | Checklists | 21 |
-| R-CHECK-05 Item assignee and due date | — | — | Optional part of 21 (D11) | 21 |
+| R-CHECK-05 Item assignee and due date | — | ✗ | `assignee_id`, `due_at` on checklist items (D11) | 32 |
 | R-COMMENT-01 Comment on a card | `POST /cards/{id}/comments` | ✓ | The count on the card front comes in 20 | 20 |
 | R-COMMENT-02 Edit my comment | `PATCH /comments/{id}` (author), `edited_at` | ✓ | | — |
 | R-COMMENT-03 Delete my comment | `DELETE /comments/{id}` | ✓ | | — |
@@ -84,7 +87,7 @@ This table is the plan as written before steps 16–21; those steps closed every
 | R-ACTIVITY-01 Board activity log | `GET /boards/{id}/activity` | ◐ | A comments-only filter | 20 |
 | R-ACTIVITY-02 Card activity log | — | ◐ | A `card_id` filter on the same endpoint | 20 |
 
-Tally: ✓ 28 · ◐ 11 · ✗ 10 · — 3 (R-MEMBER-05 and R-DATE-03 out of scope; R-CHECK-05 optional in step 21).
+Tally: ✓ 28 · ◐ 11 · ✗ 10 · — 3 (R-MEMBER-05 and R-DATE-03 out of scope; R-CHECK-05 optional in step 21). After step 31 (55 requirements): R-MEMBER-07 and R-MEMBER-08 are ✓, R-MEMBER-09 is out of scope with R-MEMBER-05, and R-DATE-03 and R-CHECK-05 are gaps for step 32 (D11).
 
 ## API gaps
 
@@ -133,6 +136,9 @@ Done on 2026-11-13 against `main` after step 28: the real app (API and Vite dev 
 | R-MEMBER-04 At least one admin | Owner row: "can't be changed or leave", with the reason | ✓ | clicked |
 | R-MEMBER-05 Several admins | — | — (D5) | — |
 | R-MEMBER-06 Leave a board | Share → Leave, after a confirmation, then home | ✓ | tests |
+| R-MEMBER-07 Observer role *(step 31)* | Viewer: no edit controls, read-only card dialog | ✓ (D5) | clicked (as the viewer) |
+| R-MEMBER-08 Change roles and remove people *(step 31)* | Share: the owner changes roles and removes people after a confirmation | ✓ (owner only, D5) | tests |
+| R-MEMBER-09 Who may comment and invite *(step 31)* | — | — (D5) | — |
 | R-LIST-01 Add lists quickly | + Add another list; stays open, Escape closes, spaces add nothing | ◐ fast typing loses names (issue 3) | clicked |
 | R-LIST-02 Rename in place | List name; empty keeps the old one | ✓ | tests |
 | R-LIST-03 Reorder lists | Move list… (positions from 1, "(current)"), and dragging | ✓ | clicked, tests |
@@ -159,9 +165,9 @@ Done on 2026-11-13 against `main` after step 28: the real app (API and Vite dev 
 | R-LABEL-05 Delete a label | After a warning | ✓ | tests |
 | R-DATE-01 Set a due date | Date and time, starting at tomorrow now; Remove; logged | ✓ (absolute time in the log, not "yesterday at") | clicked |
 | R-DATE-02 Due state | Red overdue, green complete, amber due soon | ✓ | clicked |
-| R-DATE-03 Start date | — | — (D11) | — |
+| R-DATE-03 Start date | — | not built (D11, step 32) | — |
 | R-CHECK-01 to R-CHECK-04 | Checklists in the card dialog (step 28) | ✓ | clicked (step 28), tests |
-| R-CHECK-05 Item assignee and due date | — | — (step 31 first) | — |
+| R-CHECK-05 Item assignee and due date | — | not built (D11, step 32) | — |
 | R-COMMENT-01 Comment on a card | Composer at the top; name and relative time; mixed with activity; front count | ✓ | clicked |
 | R-COMMENT-02 Edit my comment | Edit, Save, "Discard changes", "(edited)" | ✓ | tests |
 | R-COMMENT-03 Delete my comment | After a confirmation | ✓ | tests |
@@ -169,7 +175,7 @@ Done on 2026-11-13 against `main` after step 28: the real app (API and Vite dev 
 | R-ACTIVITY-01 Board activity log | Menu → Activity, All or Comments, paged | ◐ old values missing from renames (issue 2) | clicked |
 | R-ACTIVITY-02 Card activity log | In the dialog, Hide/Show details | ✓ | clicked |
 
-Tally (52 requirements): ✓ 44 · ◐ 5 (issues 1–3) · — 3.
+Tally (52 requirements): ✓ 44 · ◐ 5 (issues 1–3) · — 3. With step 31's three new member requirements (55): ✓ 46 · ◐ 5 · — 2 (R-MEMBER-05, R-MEMBER-09) · not built 2 (R-DATE-03, R-CHECK-05, step 32).
 
 ### Issues found
 
@@ -209,8 +215,12 @@ Added on 2026-11-13, once step 28 was merged. Each is its own branch and PR.
 
 1. **Step 29: check the frontend against this plan.** Click through every requirement ID in the real app, as the prototype was checked, and record in the Coverage table which are built and where. Fix the plan where the build went another way (for example, step 25 above says echoed events are skipped by `actor_id`; the frontend applies every event instead, because applying one is idempotent).
 2. **Step 30: two people at once.** The drag and realtime race under "Risks" below: two browser sessions on one board, dragging and editing at the same time, both ending with the server's order. Fix what it finds.
-3. **Step 31: second observe session.** Phase 1 again, with a second account (the user logs in): R-MEMBER-05, R-DATE-03, R-CHECK-05 and open questions 1–9 in `requirements.md`. Update the observations and requirements, then say which decisions (D5, D10, D11) and steps change.
-4. **Step 32: beyond the requirements.** Reorder checklist items (the API already takes `position`), item assignees and due dates (R-CHECK-05, only once step 31 confirms it), and touch and keyboard dragging. Each starts as a requirement in `requirements.md`, then gets its build-plan row.
+3. **Step 31: second observe session.** Phase 1 again, with a second account (the user logs in): R-MEMBER-05, R-DATE-03, R-CHECK-05 and open questions 1–9 in `requirements.md`. Update the observations and requirements, then say which decisions (D5, D10, D11) and steps change. Done on 2026-11-13: all three confirmed, questions 1–9 answered, R-MEMBER-07 to R-MEMBER-09 added. D5 keeps one owner; D10 stays a deliberate difference; D11 moves start dates and item assignees and dates to step 32; D1 has a note.
+4. **Step 32: the deferred requirements, then beyond them.** First the two step 31 confirmed (D11), each through the API and then the card dialog:
+   - **Start dates** (R-DATE-03): `cards.start_at` (a date, nullable, migration). A 422 when it's after `due_at`; the UI's picker keeps them in order, as the product does. `start_at: null` clears it. The card front and dialog show a range. No activity entry, matching the product (it publishes `card.updated` as usual for realtime).
+   - **Item assignees and due dates** (R-CHECK-05): `checklist_items.assignee_id` (a board member, else 422, through `resolve_assignees()`; cleared by `unassign_from_board()` when they leave) and `due_at`. Not added to the card's assignees. The card front adds the nearest open item's due date to its checklist count.
+
+   Then, beyond the requirements: reorder checklist items (the API already takes `position`), and touch and keyboard dragging. Each starts as a requirement in `requirements.md`, then gets its build-plan row.
 
 ## Risks and open questions
 
@@ -219,4 +229,4 @@ Added on 2026-11-13, once step 28 was merged. Each is its own branch and PR.
 - **Token storage.** A token in `localStorage` can be read by any injected script. Keep it in memory by default, and treat "remember me" as a choice the user makes knowingly. Revisit if the API gets cookie sessions.
 - **The repo stops being backend only.** Done in step 22: CLAUDE.md, CI and the README have frontend sections.
 - **The prototype drifts from the plan.** The prototype updates listed in D3, D5, D6 and D9 should land before step 23, so the UI is built from a picture that matches the API.
-- **Unconfirmed requirements** (R-MEMBER-05, R-DATE-03, R-CHECK-05 and the open questions in `requirements.md`) need a second-account observe session. D5, D10 and D11 may change after it.
+- **Unconfirmed requirements** (R-MEMBER-05, R-DATE-03, R-CHECK-05 and the open questions in `requirements.md`) needed a second-account observe session. Done in step 31: all confirmed; D5 and D10 kept, D11 moved to step 32. The few questions it left open (observers restoring archived items, removed people and their cards) don't affect the plan, because viewers can't write and removing someone already unassigns them.
