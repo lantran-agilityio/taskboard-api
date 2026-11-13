@@ -496,6 +496,29 @@ describe("archiving, restoring and deleting", () => {
     await waitFor(() => expect(window.location.hash).toBe("#board-1"));
     expect(calls.map((call) => call.key)).toContain("DELETE /cards/100");
   });
+
+  it("says the card is gone when someone else deletes it while it's open", async () => {
+    const stored = { ...BRIEF, position: null, archived_at: "2026-11-12T08:00:00Z" };
+    serve({ "GET /cards/100": { status: 200, body: stored } }, {}, [
+      list(1, "To do", []),
+    ]);
+    await open("#card-100");
+    await screen.findByText(/This card was archived/);
+
+    act(() =>
+      FakeWebSocket.latest().receive({
+        type: "card.deleted",
+        board_id: 1,
+        actor_id: 2,
+        data: { card_id: 100, title: "Brief", lists: [{ list_id: 1, card_ids: [] }] },
+      }),
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "Card not found" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/This card was archived/)).not.toBeInTheDocument();
+  });
 });
 
 describe("read-only cards", () => {
