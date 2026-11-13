@@ -25,7 +25,9 @@ These settle the six design questions from `requirements.md` and the choices the
 
 ## Coverage
 
-**Covered** means the API does it today: ✓ yes, ◐ partly, ✗ no, — out of scope. "Client" means the frontend can do it with no API change.
+This table is the plan as written before steps 16–21; those steps closed every ✗ and ◐ gap it lists (see "Frontend check" below for what the app does now).
+
+**Covered** means the API did it at the time: ✓ yes, ◐ partly, ✗ no, — out of scope. "Client" means the frontend can do it with no API change.
 
 | Requirement | Existing endpoint(s) | Covered | Gap | Step |
 | --- | --- | --- | --- | --- |
@@ -104,10 +106,79 @@ Each step names the prototype screen it builds, the API it needs, and the realti
 1. **Step 22: shell and sign-in.** Login and register screens (the API has them; the requirements don't cover them), the token in memory with a "remember me" option, an API client that turns 422 `detail` lists into field errors, the address routes `#home`, `#board-<id>` and `#card-<id>`, and the frontend CI job. *Needs:* `/auth/register`, `/auth/token`, `/users/me`.
 2. **Step 23: home.** Board tiles, starred, recently opened (local storage), create a board, and closed boards. *Needs:* `GET/POST /boards`, steps 17 and 18.
 3. **Step 24: board view, reading.** Lists and card fronts with labels, due badges, assignees and counts. The WebSocket connects and applies events, and handles `resync` by reloading. *Needs:* step 20's snapshot, `GET /boards/{id}/labels`, `GET /boards/{id}/members`, `WS /boards/{id}/ws`.
-4. **Step 25: board view, editing.** Add, rename, move and drag lists and cards; mark done; archive. Changes show at once and roll back on 422. Echoed events are skipped by `actor_id`. *Needs:* the list and card routes; step 19 for sort.
+4. **Step 25: board view, editing.** Add, rename, move and drag lists and cards; mark done; archive. Changes show at once and roll back on 422. (Built differently: every event is applied, your own echoes included, because applying one is idempotent; nothing is skipped by `actor_id`.) *Needs:* the list and card routes; step 19 for sort.
 5. **Step 26: card dialog.** Title, description, labels (picker and editor), due date, assignees, comments with edit, delete and link, and the card's activity. *Needs:* step 16, step 20 (filters, `GET /comments/{id}`).
 6. **Step 27: board menu and sharing.** About, activity (all or comments), archived items with restore and delete, labels, close board, and Share (invite by email, roles, leave). *Needs:* steps 17–20 and the member routes.
 7. **Step 28: checklists in the card dialog.** *Needs:* step 21.
+
+## Frontend check (step 29)
+
+Done on 2026-11-13 against `main` after step 28: the real app (API and Vite dev server) with a seeded board, three users (owner, editor, viewer), clicked through in Chrome. "Clicked" means checked by hand in the browser; "tests" means checked by the frontend's tests through what the user sees (`frontend/src/**/*.test.tsx`), which cover it in more detail than a click-through. Drag and drop was checked with real `DragEvent`s in the page, because the browser tool's synthetic mouse doesn't start a native drag.
+
+✓ built as the requirement says (or as the decision named says) · ◐ built, with a gap found below · — out of scope.
+
+| Requirement | In the app | Result | Checked |
+| --- | --- | --- | --- |
+| R-BOARD-01 See my boards | Home: Starred, Recently opened, All boards; closed boards left out | ✓ | clicked |
+| R-BOARD-02 Create a board | Home → Create a board; spaces keep Create disabled with "A title is required"; opens the new, empty board | ◐ the creation isn't logged (issue 1) | clicked |
+| R-BOARD-03 Rename in place | Board title; Enter saves, the page title follows; empty keeps the old one | ◐ the log says "changed the board", not old → new (issue 2) | clicked |
+| R-BOARD-04 Star a board | Star in the board bar and on tiles; a Starred row on home | ✓ | clicked |
+| R-BOARD-05 Board description | Menu → About, editable by editors and the owner | ✓ | clicked, tests |
+| R-BOARD-06 Close a board | Menu → Close board…, "You can reopen it later"; banner with Reopen; read-only | ✓ | clicked |
+| R-BOARD-07 See and reopen closed boards | Home → Closed boards (n), Reopen and Delete; "No boards have been closed." | ✓ | clicked, tests |
+| R-BOARD-08 Delete a closed board | Only in Closed boards, after a confirmation | ✓ | clicked |
+| R-MEMBER-01 Creator is admin | Owner first in Share | ✓ (D5) | clicked |
+| R-MEMBER-02 Invite a member | Share: email, Editor/Viewer, Invite | ✓ (email only, D5) | clicked, tests |
+| R-MEMBER-03 See board members | Share lists everyone with roles | ✓ | clicked |
+| R-MEMBER-04 At least one admin | Owner row: "can't be changed or leave", with the reason | ✓ | clicked |
+| R-MEMBER-05 Several admins | — | — (D5) | — |
+| R-MEMBER-06 Leave a board | Share → Leave, after a confirmation, then home | ✓ | tests |
+| R-LIST-01 Add lists quickly | + Add another list; stays open, Escape closes, spaces add nothing | ◐ fast typing loses names (issue 3) | clicked |
+| R-LIST-02 Rename in place | List name; empty keeps the old one | ✓ | tests |
+| R-LIST-03 Reorder lists | Move list… (positions from 1, "(current)"), and dragging | ✓ | clicked, tests |
+| R-LIST-04 Card count | Header count, updates on moves and drags | ✓ | clicked |
+| R-LIST-05 Sort a list once | Sort cards… only with cards; three orders | ✓ | clicked |
+| R-LIST-06 Archive a list | Archive this list…, confirmed; shows under Archived items → Lists | ✓ | clicked |
+| R-LIST-07 Restore to original position | Restore puts it back where it was | ✓ | clicked |
+| R-LIST-08 Delete an archived list | Only from Archived items, after a warning | ✓ | clicked, tests |
+| R-CARD-01 Add cards quickly | + Add a card; stays open; Escape or spaces close it | ◐ fast typing loses titles (issue 3) | clicked |
+| R-CARD-02 Card front summary | Labels, done check, due badge, checklist done/total, comment count, description icon, avatars | ✓ | clicked |
+| R-CARD-03 Own address | `#card-<id>` dialog over the board with list, details, description, comments and activity | ✓ (D9) | clicked |
+| R-CARD-04 Title and description | Click to rename; Markdown description with Save and Cancel | ✓ | tests |
+| R-CARD-05 Mark done | Done toggle on the front and in the dialog, without a due date too; logged | ✓ | clicked |
+| R-CARD-06 Move by dragging | Drag within and between lists; counts update | ✓ | clicked (events), tests |
+| R-CARD-07 Move with a form | "In list … ▾": list and position from 1; logged "from To do to Doing" | ✓ | clicked |
+| R-CARD-08 Archive a card | Card actions → Archive, no confirmation; quick archive on done cards; archived dialog read-only with Restore and Delete | ✓ | clicked |
+| R-CARD-09 Restore a card | Logged "sent this card to the board"; back at its old position | ✓ | clicked |
+| R-CARD-10 Delete an archived card | Delete for good…, warns it's permanent | ✓ (D3: the log keeps a note) | tests |
+| R-CARD-11 Assign members | Members picker searches board members; avatars; "joined this card" | ✓ | clicked |
+| R-LABEL-01 Default labels | Six unnamed colours on a new board | ✓ | clicked |
+| R-LABEL-02 Apply labels | Picker with search, in colour order | ✓ | clicked |
+| R-LABEL-03 Create a label | From the picker or Menu → Labels; applied to the card at once | ✓ | tests |
+| R-LABEL-04 Edit a label | ✎ in the picker or Menu → Labels | ✓ | tests |
+| R-LABEL-05 Delete a label | After a warning | ✓ | tests |
+| R-DATE-01 Set a due date | Date and time, starting at tomorrow now; Remove; logged | ✓ (absolute time in the log, not "yesterday at") | clicked |
+| R-DATE-02 Due state | Red overdue, green complete, amber due soon | ✓ | clicked |
+| R-DATE-03 Start date | — | — (D11) | — |
+| R-CHECK-01 to R-CHECK-04 | Checklists in the card dialog (step 28) | ✓ | clicked (step 28), tests |
+| R-CHECK-05 Item assignee and due date | — | — (step 31 first) | — |
+| R-COMMENT-01 Comment on a card | Composer at the top; name and relative time; mixed with activity; front count | ✓ | clicked |
+| R-COMMENT-02 Edit my comment | Edit, Save, "Discard changes", "(edited)" | ✓ | tests |
+| R-COMMENT-03 Delete my comment | After a confirmation | ✓ | tests |
+| R-COMMENT-04 Link to a comment | Copy link → `#card-<id>-comment-<id>`, highlighted | ✓ | tests |
+| R-ACTIVITY-01 Board activity log | Menu → Activity, All or Comments, paged | ◐ old values missing from renames (issue 2) | clicked |
+| R-ACTIVITY-02 Card activity log | In the dialog, Hide/Show details | ✓ | clicked |
+
+Tally (52 requirements): ✓ 44 · ◐ 5 (issues 1–3) · — 3.
+
+### Issues found
+
+Each is fixed in its own PR.
+
+1. **Creating a board isn't logged** (R-BOARD-02). `POST /boards` publishes no event, so a new board's log says "Nothing has happened yet." Fix: publish `board.created`.
+2. **Changes don't say what they changed from, when the log can't see the earlier state** (R-BOARD-03, R-ACTIVITY-01). Update events carry only the new state, so the log compares each with the previous entry about the same thing. A board has no earlier entry at all (issue 1), default labels have none, and anything whose earlier entry is on an older page shows as "changed the board" or "updated “…”" until "Show older" is clicked. Fix: update events also carry the old values of what changed.
+3. **Typing quickly in "Add a card" or "Add a list" loses titles** (R-CARD-01, R-LIST-01). While a card is being saved, Enter is ignored (the button is disabled) and the field is then cleared, so a title typed meanwhile is lost. Seen by typing three titles in a row: only the first was added. Fix: clear the field at once and save the titles one after another.
+4. **"1 cards", "1 comments"** in the hover text of the list count and the card front's comment badge. Fix: singular for one.
 
 ## After the build order
 
