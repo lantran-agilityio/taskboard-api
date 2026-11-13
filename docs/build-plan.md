@@ -79,7 +79,7 @@ This table is the plan as written before steps 16–21; those steps closed every
 | R-CHECK-02 Add and tick items | — | ✗ | Checklists | 21 |
 | R-CHECK-03 Hide ticked items | — | ✗ | Client-side once 21 exists | 21 |
 | R-CHECK-04 Delete a checklist | — | ✗ | Checklists | 21 |
-| R-CHECK-05 Item assignee and due date | — | ✗ | `assignee_id`, `due_at` on checklist items (D11) | 32 |
+| R-CHECK-05 Item assignee and due date | — | ✗ | `assignee_id`, `due_at` on checklist items (D11). Done in step 32 | 32 |
 | R-COMMENT-01 Comment on a card | `POST /cards/{id}/comments` | ✓ | The count on the card front comes in 20 | 20 |
 | R-COMMENT-02 Edit my comment | `PATCH /comments/{id}` (author), `edited_at` | ✓ | | — |
 | R-COMMENT-03 Delete my comment | `DELETE /comments/{id}` | ✓ | | — |
@@ -167,7 +167,7 @@ Done on 2026-11-13 against `main` after step 28: the real app (API and Vite dev 
 | R-DATE-02 Due state | Red overdue, green complete, amber due soon | ✓ | clicked |
 | R-DATE-03 Start date *(step 32)* | Card → Dates: start and due ticked on or off, kept in order; a range on the card | ✓ (logged, unlike the product) | tests |
 | R-CHECK-01 to R-CHECK-04 | Checklists in the card dialog (step 28) | ✓ | clicked (step 28), tests |
-| R-CHECK-05 Item assignee and due date | — | not built (D11, step 32) | — |
+| R-CHECK-05 Item assignee and due date *(step 32)* | Item options: assignee and due date; shown on the row; the card front adds the next item due | ✓ (set from the item's options, not while adding it) | tests |
 | R-COMMENT-01 Comment on a card | Composer at the top; name and relative time; mixed with activity; front count | ✓ | clicked |
 | R-COMMENT-02 Edit my comment | Edit, Save, "Discard changes", "(edited)" | ✓ | tests |
 | R-COMMENT-03 Delete my comment | After a confirmation | ✓ | tests |
@@ -175,7 +175,7 @@ Done on 2026-11-13 against `main` after step 28: the real app (API and Vite dev 
 | R-ACTIVITY-01 Board activity log | Menu → Activity, All or Comments, paged | ◐ old values missing from renames (issue 2) | clicked |
 | R-ACTIVITY-02 Card activity log | In the dialog, Hide/Show details | ✓ | clicked |
 
-Tally (52 requirements): ✓ 44 · ◐ 5 (issues 1–3) · — 3. With step 31's three new member requirements (55): ✓ 46 · ◐ 5 · — 2 (R-MEMBER-05, R-MEMBER-09) · not built 2 (R-DATE-03, R-CHECK-05, step 32).
+Tally (52 requirements): ✓ 44 · ◐ 5 (issues 1–3) · — 3. With step 31's three new member requirements (55): ✓ 46 · ◐ 5 · — 2 (R-MEMBER-05, R-MEMBER-09) · not built 2 (R-DATE-03, R-CHECK-05, step 32). Both built in step 32: ✓ 48 · ◐ 5 · — 2.
 
 ### Issues found
 
@@ -218,7 +218,7 @@ Added on 2026-11-13, once step 28 was merged. Each is its own branch and PR.
 3. **Step 31: second observe session.** Phase 1 again, with a second account (the user logs in): R-MEMBER-05, R-DATE-03, R-CHECK-05 and open questions 1–9 in `requirements.md`. Update the observations and requirements, then say which decisions (D5, D10, D11) and steps change. Done on 2026-11-13: all three confirmed, questions 1–9 answered, R-MEMBER-07 to R-MEMBER-09 added. D5 keeps one owner; D10 stays a deliberate difference; D11 moves start dates and item assignees and dates to step 32; D1 has a note.
 4. **Step 32: the deferred requirements, then beyond them.** First the two step 31 confirmed (D11), each through the API and then the card dialog:
    - **Start dates** (R-DATE-03): `cards.start_at` (nullable, migration 0009). A timestamp like `due_at`, holding the start of the chosen day in the user's time zone, so the API can compare the two without knowing time zones. A 422 when it's after `due_at`; the UI's picker keeps them in order, as the product does. `start_at: null` clears it. The card front and dialog show a range. Built: the change is logged ("set the start date to Nov 18"), unlike the product, because every `card.updated` event writes an activity entry and skipping one kind would be a special case.
-   - **Item assignees and due dates** (R-CHECK-05): `checklist_items.assignee_id` (a board member, else 422, through `resolve_assignees()`; cleared by `unassign_from_board()` when they leave) and `due_at`. Not added to the card's assignees. The card front adds the nearest open item's due date to its checklist count.
+   - **Item assignees and due dates** (R-CHECK-05): `checklist_items.assignee_id` (a board member, else 422, through `resolve_assignees()`; cleared by `unassign_from_board()` when they leave) and `due_at` (migration 0010). Not added to the card's assignees. The card front adds the nearest open item's due date to its checklist count (`CardRead.checklist_due_at`). Built: set from the item's options panel; the API also takes both when adding an item, but the add form stays a single text field so items can still be typed one after another.
 
    Then, beyond the requirements: reorder checklist items (the API already takes `position`), and touch and keyboard dragging. Each starts as a requirement in `requirements.md`, then gets its build-plan row.
 

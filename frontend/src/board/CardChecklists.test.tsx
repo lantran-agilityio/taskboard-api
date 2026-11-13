@@ -20,6 +20,8 @@ function item(id: number, text: string, done = false, position = 0): ChecklistIt
     done,
     position,
     created_at: "2026-11-13T00:00:00Z",
+    assignee_id: null,
+    due_at: null,
   };
 }
 
@@ -315,6 +317,50 @@ describe("changing checklists", () => {
     await user.click(pop.getByRole("button", { name: "Delete item" }));
     expect(shots_.queryByText("Team photo")).not.toBeInTheDocument();
     expect(calls.map((call) => call.key)).toContain("DELETE /checklist-items/72");
+  });
+
+  it("gives an item its own assignee and due date, and clears them", async () => {
+    const { calls } = serve({ "PATCH /checklist-items/71": patchItem(CLOSE_UP) });
+    const user = await open();
+    const shots_ = await shots();
+
+    await user.click(shots_.getByRole("button", { name: "Item options for Close-up" }));
+    let pop = within(screen.getByRole("dialog", { name: "Item" }));
+    await user.selectOptions(pop.getByLabelText("Assignee"), "bob@example.com");
+    await user.type(pop.getByLabelText("Due"), "2026-11-25T09:30");
+    await user.click(pop.getByRole("button", { name: "Save" }));
+
+    expect(bodiesOf(calls, "PATCH /checklist-items/71")).toEqual([
+      { assignee_id: 2, due_at: new Date("2026-11-25T09:30").toISOString() },
+    ]);
+    // Shown on the item's row: the date and the person.
+    const row = within(shots_.getByText("Close-up").closest("li")!);
+    expect(row.getByText("Nov 25")).toBeInTheDocument();
+    expect(row.getByRole("img", { name: "bob@example.com" })).toBeInTheDocument();
+
+    await user.click(shots_.getByRole("button", { name: "Item options for Close-up" }));
+    pop = within(screen.getByRole("dialog", { name: "Item" }));
+    await user.selectOptions(pop.getByLabelText("Assignee"), "No one");
+    await user.clear(pop.getByLabelText("Due"));
+    await user.click(pop.getByRole("button", { name: "Save" }));
+
+    expect(bodiesOf(calls, "PATCH /checklist-items/71").at(-1)).toEqual({
+      assignee_id: null,
+      due_at: null,
+    });
+    expect(row.queryByText("Nov 25")).not.toBeInTheDocument();
+  });
+
+  it("sends nothing when the options are saved unchanged", async () => {
+    const { calls } = serve({ "PATCH /checklist-items/71": patchItem(CLOSE_UP) });
+    const user = await open();
+    const shots_ = await shots();
+
+    await user.click(shots_.getByRole("button", { name: "Item options for Close-up" }));
+    const pop = within(screen.getByRole("dialog", { name: "Item" }));
+    await user.click(pop.getByRole("button", { name: "Save" }));
+
+    expect(bodiesOf(calls, "PATCH /checklist-items/71")).toEqual([]);
   });
 
   it("deletes a checklist after a confirmation", async () => {

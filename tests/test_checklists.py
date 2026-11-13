@@ -90,6 +90,8 @@ def test_get_checklist_has_its_items_in_order(client: TestClient, card: dict) ->
         "done": False,
         "position": 0,
         "created_at": first["created_at"],
+        "assignee_id": None,
+        "due_at": None,
     }
     assert client.get(f"/cards/{card['id']}/checklists").json() == [response.json()]
 
@@ -255,6 +257,170 @@ def test_delete_item_renumbers(client: TestClient, card: dict) -> None:
     assert response.status_code == 204
     items = client.get(f"/checklists/{checklist['id']}").json()["items"]
     assert [(item["text"], item["position"]) for item in items] == [("Two", 0)]
+
+
+# Item assignees and due dates (R-CHECK-05)
+
+DUE = "2026-11-20T17:00:00+07:00"
+DUE_UTC = "2026-11-20T10:00:00Z"
+LATER_UTC = "2026-11-25T10:00:00Z"
+
+
+def me(client: TestClient, headers: dict | None = None) -> int:
+    return client.get("/users/me", headers=headers).json()["id"]
+
+
+def share_with_bob(client: TestClient, board_id: int, other_headers: dict) -> int:
+    response = client.post(
+        f"/boards/{board_id}/members", json={"email": BOB, "role": "editor"}
+    )
+    assert response.status_code == 201
+    return me(client, other_headers)
+
+
+def test_new_item_has_no_assignee_or_due_date(client: TestClient, card: dict) -> None:
+    checklist = add_checklist(client, card["id"])
+
+    item = add_item(client, checklist["id"])
+
+    assert item["assignee_id"] is None
+    assert item["due_at"] is None
+
+
+def test_add_item_with_assignee_and_due_date(client: TestClient, card: dict) -> None:
+    checklist = add_checklist(client, card["id"])
+
+    response = client.post(
+        f"/checklists/{checklist['id']}/items",
+        json={"text": "Step", "assignee_id": me(client), "due_at": DUE},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["assignee_id"] == me(client)
+    assert response.json()["due_at"] == DUE_UTC
+
+
+def test_set_change_and_clear_item_details(
+    client: TestClient, card: dict, other_headers: dict
+) -> None:
+    bob = share_with_bob(client, card["board_id"], other_headers)
+    checklist = add_checklist(client, card["id"])
+    item = add_item(client, checklist["id"])
+    path = f"/checklist-items/{item['id']}"
+
+    set_ = client.patch(path, json={"assignee_id": bob, "due_at": DUE}).json()
+    kept = client.patch(path, json={"text": "Renamed"}).json()
+    cleared = client.patch(path, json={"assignee_id": None, "due_at": None}).json()
+
+    assert (set_["assignee_id"], set_["due_at"]) == (bob, DUE_UTC)
+    assert (kept["assignee_id"], kept["due_at"]) == (bob, DUE_UTC)
+    assert (cleared["assignee_id"], cleared["due_at"]) == (None, None)
+
+
+def test_item_assignee_is_not_a_card_assignee(client: TestClient, card: dict) -> None:
+    checklist = add_checklist(client, card["id"])
+    add_item(client, checklist["id"])
+
+    client.post(
+        f"/checklists/{checklist['id']}/items",
+        json={"text": "Mine", "assignee_id": me(client)},
+    )
+
+    assert client.get(f"/cards/{card['id']}").json()["assignee_ids"] == []
+
+
+def test_item_assignee_must_be_on_the_board(
+    client: TestClient, card: dict, other_headers: dict
+) -> None:
+    bob = me(client, other_headers)  # registered, but not on this board
+    checklist = add_checklist(client, card["id"])
+    item = add_item(client, checklist["id"])
+
+    for assignee in (bob, 999999):
+        added = client.post(
+            f"/checklists/{checklist['id']}/items",
+            json={"text": "X", "assignee_id": assignee},
+        )
+        changed = client.patch(
+            f"/checklist-items/{item['id']}", json={"assignee_id": assignee}
+        )
+
+        for response in (added, changed):
+            assert response.status_code == 422
+            assert response.json()["detail"][0]["loc"] == ["body", "assignee_id"]
+    assert item_texts(client, checklist["id"]) == ["Step"]
+    assert client.get(f"/checklists/{checklist['id']}").json()["items"] == [item]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"due_at": "2026-11-20T17:00:00"},
+        {"due_at": "friday"},
+        {"assignee_id": "bob"},
+        {"assignee_id": 0},
+    ],
+)
+def test_invalid_item_details(client: TestClient, card: dict, payload: dict) -> None:
+    checklist = add_checklist(client, card["id"])
+    item = add_item(client, checklist["id"])
+
+    response = client.patch(f"/checklist-items/{item['id']}", json=payload)
+
+    assert response.status_code == 422
+    assert client.get(f"/checklists/{checklist['id']}").json()["items"] == [item]
+
+
+def test_leaving_the_board_unassigns_items(
+    client: TestClient, card: dict, other_headers: dict
+) -> None:
+    bob = share_with_bob(client, card["board_id"], other_headers)
+    checklist = add_checklist(client, card["id"])
+    item = add_item(client, checklist["id"])
+    client.patch(f"/checklist-items/{item['id']}", json={"assignee_id": bob})
+
+    response = client.delete(
+        f"/boards/{card['board_id']}/members/{bob}", headers=other_headers
+    )
+
+    assert response.status_code == 204
+    items = client.get(f"/checklists/{checklist['id']}").json()["items"]
+    assert items[0]["assignee_id"] is None
+
+
+def test_card_shows_its_nearest_open_item_due_date(
+    client: TestClient, card: dict
+) -> None:
+    def next_due() -> str | None:
+        return client.get(f"/cards/{card['id']}").json()["checklist_due_at"]
+
+    assert next_due() is None
+    checklist = add_checklist(client, card["id"])
+    later = add_item(client, checklist["id"], "Later")
+    sooner = add_item(client, checklist["id"], "Sooner")
+    client.patch(f"/checklist-items/{later['id']}", json={"due_at": LATER_UTC})
+    assert next_due() == LATER_UTC
+    client.patch(f"/checklist-items/{sooner['id']}", json={"due_at": DUE})
+    assert next_due() == DUE_UTC
+
+    # Ticked items no longer count.
+    client.patch(f"/checklist-items/{sooner['id']}", json={"done": True})
+    assert next_due() == LATER_UTC
+
+
+def test_item_details_are_in_the_event(client: TestClient, card: dict) -> None:
+    checklist = add_checklist(client, card["id"])
+    item = add_item(client, checklist["id"])
+
+    client.patch(
+        f"/checklist-items/{item['id']}",
+        json={"assignee_id": me(client), "due_at": DUE},
+    )
+
+    entry = client.get(f"/boards/{card['board_id']}/activity").json()["items"][0]
+    assert entry["type"] == "checklist_item.updated"
+    assert entry["data"]["item"]["assignee_id"] == me(client)
+    assert entry["data"]["item"]["due_at"] == DUE_UTC
 
 
 # Frozen cards, closed boards and access

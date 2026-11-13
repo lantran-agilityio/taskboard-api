@@ -1,12 +1,14 @@
 """Check and apply a card's labels and assignees."""
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from app.models.board import Board
 from app.models.board_list import BoardList
 from app.models.card import Card
 from app.models.card_details import card_assignees
+from app.models.checklist import Checklist
+from app.models.checklist_item import ChecklistItem
 from app.models.label import Label
 from app.models.user import User
 from app.services.permissions import board_role
@@ -35,11 +37,23 @@ def resolve_assignees(db: Session, board: Board, ids: list[int]) -> list[User]:
 
 
 def unassign_from_board(db: Session, board_id: int, user_id: int) -> None:
-    """Remove the user from every card on the board (they're leaving it)."""
+    """Remove the user from every card and checklist item on the board (they're
+    leaving it)."""
     board_cards = select(Card.id).join(BoardList).where(BoardList.board_id == board_id)
     db.execute(
         delete(card_assignees).where(
             card_assignees.c.user_id == user_id,
             card_assignees.c.card_id.in_(board_cards),
         )
+    )
+    board_checklists = select(Checklist.id).where(Checklist.card_id.in_(board_cards))
+    db.execute(
+        update(ChecklistItem)
+        .where(
+            ChecklistItem.assignee_id == user_id,
+            ChecklistItem.checklist_id.in_(board_checklists),
+        )
+        .values(assignee_id=None)
+        # The items aren't loaded here, so there's nothing in the session to sync.
+        .execution_options(synchronize_session=False)
     )

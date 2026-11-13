@@ -432,7 +432,11 @@ export function CardDialog({
                     save("save the description", { description })
                   }
                 />
-                <Checklists handle={checklists} editable={editable} />
+                <Checklists
+                  handle={checklists}
+                  editable={editable}
+                  members={data.members}
+                />
               </div>
               <aside className="dlg-side">
                 <CardFeed

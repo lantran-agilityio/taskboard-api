@@ -177,9 +177,17 @@ export function CardFront({
           </span>
         )}
         {card.checklist_total > 0 && (
-          <span className="badge" title="Checklist items done">
+          <span
+            className="badge"
+            title={
+              card.checklist_due_at
+                ? "Checklist items done, and the next item due"
+                : "Checklist items done"
+            }
+          >
             <TickboxIcon />
             {card.checklist_done}/{card.checklist_total}
+            {card.checklist_due_at && ` • ${shortDay(card.checklist_due_at)}`}
           </span>
         )}
         <span className="cardno">#{card.id}</span>

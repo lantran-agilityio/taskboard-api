@@ -78,6 +78,15 @@ class Card(Base):
         .scalar_subquery()
     )
 
+    # The nearest due date among its unticked checklist items, for the card front.
+    checklist_due_at: Mapped[datetime | None] = column_property(
+        select(func.min(ChecklistItem.due_at))
+        .join(Checklist, ChecklistItem.checklist_id == Checklist.id)
+        .where(Checklist.card_id == id, ~ChecklistItem.done)
+        .correlate_except(Checklist, ChecklistItem)
+        .scalar_subquery()
+    )
+
     board_list: Mapped["BoardList"] = relationship(back_populates="cards")
     labels: Mapped[list["Label"]] = relationship(
         secondary=card_labels, back_populates="cards", order_by="Label.id"

@@ -7,6 +7,17 @@ export interface ChecklistItem {
   done: boolean;
   position: number;
   created_at: string;
+  /** Its own assignee (a board member) and due date (R-CHECK-05). */
+  assignee_id: number | null;
+  due_at: string | null;
+}
+
+/** Any of an item's fields; leaving one out keeps it, null clears it. */
+export interface ItemChange {
+  text?: string;
+  done?: boolean;
+  assignee_id?: number | null;
+  due_at?: string | null;
 }
 
 /** A card's checklist with its items, in order (as the API reads it). */
@@ -66,7 +77,7 @@ export function createItem(
 export function updateItem(
   token: string,
   itemId: number,
-  change: { text?: string; done?: boolean },
+  change: ItemChange,
 ): Promise<ChecklistItem> {
   return apiFetch<ChecklistItem>(`/checklist-items/${itemId}`, {
     method: "PATCH",
