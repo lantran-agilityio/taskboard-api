@@ -72,6 +72,15 @@ def publish(
     db.execute(select(func.pg_notify(CHANNEL, payload)))
 
 
+def changes_from(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
+    """The old values of the fields that changed, for an update event's `previous`.
+
+    Update events carry the new state; with the old values too, the activity log
+    can say what something changed from without finding the entry before it.
+    """
+    return {key: value for key, value in before.items() if after.get(key) != value}
+
+
 def list_order(board: Board) -> list[int]:
     """The board's active list ids in position order."""
     return [item.id for item in board.active_lists]

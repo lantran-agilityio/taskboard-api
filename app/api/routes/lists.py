@@ -11,7 +11,13 @@ from app.api.errors import body_validation_error, validation_error
 from app.core.database import get_db
 from app.models.board_list import BoardList
 from app.models.card import Card
-from app.realtime.events import EventType, card_order, list_order, publish
+from app.realtime.events import (
+    EventType,
+    card_order,
+    changes_from,
+    list_order,
+    publish,
+)
 from app.schemas.board_list import ListCreate, ListRead, ListSort, ListUpdate, SortBy
 from app.schemas.card import CardRead
 from app.services.ordering import insert_item, move_item, remove_item, sort_items
@@ -22,19 +28,24 @@ board_lists_router = APIRouter(prefix="/boards/{board_id}/lists", tags=["lists"]
 router = APIRouter(prefix="/lists", tags=["lists"])
 
 
+def list_data(board_list: BoardList) -> dict[str, Any]:
+    return ListRead.model_validate(board_list).model_dump(mode="json")
+
+
 def publish_list(
-    db: Session, event_type: EventType, board_list: BoardList, actor_id: int
+    db: Session,
+    event_type: EventType,
+    board_list: BoardList,
+    actor_id: int,
+    before: dict[str, Any] | None = None,
 ) -> None:
-    publish(
-        db,
-        board_list.board_id,
-        event_type,
-        {
-            "list": ListRead.model_validate(board_list).model_dump(mode="json"),
-            "list_ids": list_order(board_list.board),
-        },
-        actor_id=actor_id,
-    )
+    data: dict[str, Any] = {
+        "list": list_data(board_list),
+        "list_ids": list_order(board_list.board),
+    }
+    if before is not None:
+        data["previous"] = changes_from(before, data["list"])
+    publish(db, board_list.board_id, event_type, data, actor_id=actor_id)
 
 
 def check_archived(board_list: BoardList, archived: bool, message: str) -> None:
@@ -82,6 +93,7 @@ def update_list(
     db: Session = Depends(get_db),
 ) -> BoardList:
     check_archived(board_list, False, "List is archived; restore it first")
+    before = list_data(board_list)
     # Move first: if the position is invalid, nothing has changed yet.
     if payload.position is not None:
         try:
@@ -93,7 +105,7 @@ def update_list(
     if payload.name is not None:
         board_list.name = payload.name
     db.flush()
-    publish_list(db, EventType.LIST_UPDATED, board_list, user.id)
+    publish_list(db, EventType.LIST_UPDATED, board_list, user.id, before)
     db.commit()
     db.refresh(board_list)
     return board_list

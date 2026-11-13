@@ -205,6 +205,10 @@ export function describe(
   scope: Scope = "card",
 ): string {
   const d = entry.data;
+  // Update events carry the old values of what changed: they win over the
+  // state rebuilt from earlier entries, which may not be loaded yet.
+  const state = d?.card ?? d?.list ?? d?.label ?? d?.board;
+  if (d?.previous && state) previous = { ...state, ...d.previous };
   const card =
     scope === "card" ? "this card" : quoted(d.card?.title ?? d.title ?? "a card");
   // Comments and checklists only say which card by id.

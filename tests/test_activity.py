@@ -300,3 +300,35 @@ def test_card_id_includes_checklist_entries(
         filtered(client, board_id, card_id=two_cards["c"]["id"], limit=1)[0]["type"]
         == "card.archived"
     )
+
+
+def test_updates_carry_the_old_values_of_what_changed(
+    client: TestClient, board: dict
+) -> None:
+    # Update events only carry the new state; `previous` lets the log say what
+    # it changed from even when the earlier entry isn't on the page it reads.
+    todo = client.post(f"/boards/{board['id']}/lists", json={"name": "To do"}).json()
+    done = client.post(f"/boards/{board['id']}/lists", json={"name": "Done"}).json()
+    card = client.post(f"/lists/{todo['id']}/cards", json={"title": "Brief"}).json()
+    label = client.get(f"/boards/{board['id']}/labels").json()[0]
+
+    client.patch(f"/boards/{board['id']}", json={"name": "Renamed"})
+    client.patch(f"/lists/{todo['id']}", json={"name": "Backlog"})
+    client.patch(f"/cards/{card['id']}", json={"list_id": done["id"], "title": "Plan"})
+    client.patch(f"/labels/{label['id']}", json={"name": "Bug"})
+
+    label_entry, card_entry, list_entry, board_entry = activity(client, board["id"])[:4]
+    assert board_entry["data"]["previous"] == {"name": "Project X"}
+    assert list_entry["data"]["previous"] == {"name": "To do"}
+    assert card_entry["data"]["previous"] == {"list_id": todo["id"], "title": "Brief"}
+    assert label_entry["data"]["previous"] == {"name": ""}
+
+
+def test_an_update_that_changes_nothing_has_no_old_values(
+    client: TestClient, board: dict
+) -> None:
+    todo = client.post(f"/boards/{board['id']}/lists", json={"name": "To do"}).json()
+
+    client.patch(f"/lists/{todo['id']}", json={"name": "To do"})
+
+    assert activity(client, board["id"])[0]["data"]["previous"] == {}
