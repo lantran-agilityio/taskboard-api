@@ -43,6 +43,7 @@ function serve(routes: Routes = {}, board: Partial<Board> = {}, start = lists())
       status: 200,
       body: { items: [], next_before: null },
     },
+    "GET /cards/100/checklists": { status: 200, body: [] },
     ...routes,
   });
 }

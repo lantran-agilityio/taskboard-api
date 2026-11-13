@@ -122,7 +122,14 @@ export function useBoard(boardId: number, token: string): BoardHandle {
     const socket = new BoardSocket({
       boardId,
       token,
-      onReady: () => void load(),
+      onReady: () => {
+        void load();
+        // Events may have been missed: listeners that hold their own copy of
+        // something (a card's checklists) re-read it.
+        listeners.current.forEach((listener) =>
+          listener({ type: "resync", board_id: boardId, actor_id: 0, data: {} }),
+        );
+      },
       onEvent: (event) => {
         if (loads > 0) pending.push(event);
         // Our own changes come back as events too: they're applied like any
