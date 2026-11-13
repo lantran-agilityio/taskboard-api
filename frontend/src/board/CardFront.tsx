@@ -9,6 +9,7 @@ import {
   TickboxIcon,
 } from "../components/icons";
 import { plural } from "../format";
+import { datesText, shortDay } from "./dates";
 import { dueState, type Card, type DueState, type Label, type Member } from "./model";
 
 const DUE_WORD: Record<DueState, string> = {
@@ -40,10 +41,6 @@ export function Avatar({ member, small = false }: { member: Member; small?: bool
       {initials}
     </span>
   );
-}
-
-function shortDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 export interface CardActions {
@@ -153,8 +150,14 @@ export function CardFront({
         {due && card.due_at && (
           <span className={`due ${due}`} title={DUE_WORD[due]}>
             <ClockIcon />
-            {shortDate(card.due_at)}
+            {datesText(card, shortDay)}
             {(due === "overdue" || due === "complete") && <b>{DUE_WORD[due]}</b>}
+          </span>
+        )}
+        {!card.due_at && card.start_at && (
+          <span className="due upcoming" title="Start date">
+            <ClockIcon />
+            {datesText(card)}
           </span>
         )}
         {card.description && (

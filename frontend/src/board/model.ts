@@ -28,6 +28,7 @@ export interface Card {
   position: number | null;
   created_at: string;
   archived_at: string | null;
+  start_at: string | null;
   due_at: string | null;
   due_complete: boolean;
   label_ids: number[];

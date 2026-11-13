@@ -74,7 +74,7 @@ This table is the plan as written before steps 16–21; those steps closed every
 | R-LABEL-05 Delete a label | `DELETE /labels/{id}` (removed from cards) | ✓ | | — |
 | R-DATE-01 Set a due date | `PATCH /cards/{id}` `due_at` | ✓ | | — |
 | R-DATE-02 Due state | `due_at`, `due_complete` | ✓ | Overdue, soon and complete are worked out client-side | client |
-| R-DATE-03 Start date | — | ✗ | `start_at` on cards (D11) | 32 |
+| R-DATE-03 Start date | — | ✗ | `start_at` on cards (D11). Done in step 32 | 32 |
 | R-CHECK-01 Add a checklist | — | ✗ | Checklists | 21 |
 | R-CHECK-02 Add and tick items | — | ✗ | Checklists | 21 |
 | R-CHECK-03 Hide ticked items | — | ✗ | Client-side once 21 exists | 21 |
@@ -165,7 +165,7 @@ Done on 2026-11-13 against `main` after step 28: the real app (API and Vite dev 
 | R-LABEL-05 Delete a label | After a warning | ✓ | tests |
 | R-DATE-01 Set a due date | Date and time, starting at tomorrow now; Remove; logged | ✓ (absolute time in the log, not "yesterday at") | clicked |
 | R-DATE-02 Due state | Red overdue, green complete, amber due soon | ✓ | clicked |
-| R-DATE-03 Start date | — | not built (D11, step 32) | — |
+| R-DATE-03 Start date *(step 32)* | Card → Dates: start and due ticked on or off, kept in order; a range on the card | ✓ (logged, unlike the product) | tests |
 | R-CHECK-01 to R-CHECK-04 | Checklists in the card dialog (step 28) | ✓ | clicked (step 28), tests |
 | R-CHECK-05 Item assignee and due date | — | not built (D11, step 32) | — |
 | R-COMMENT-01 Comment on a card | Composer at the top; name and relative time; mixed with activity; front count | ✓ | clicked |
@@ -217,7 +217,7 @@ Added on 2026-11-13, once step 28 was merged. Each is its own branch and PR.
 2. **Step 30: two people at once.** The drag and realtime race under "Risks" below: two browser sessions on one board, dragging and editing at the same time, both ending with the server's order. Fix what it finds.
 3. **Step 31: second observe session.** Phase 1 again, with a second account (the user logs in): R-MEMBER-05, R-DATE-03, R-CHECK-05 and open questions 1–9 in `requirements.md`. Update the observations and requirements, then say which decisions (D5, D10, D11) and steps change. Done on 2026-11-13: all three confirmed, questions 1–9 answered, R-MEMBER-07 to R-MEMBER-09 added. D5 keeps one owner; D10 stays a deliberate difference; D11 moves start dates and item assignees and dates to step 32; D1 has a note.
 4. **Step 32: the deferred requirements, then beyond them.** First the two step 31 confirmed (D11), each through the API and then the card dialog:
-   - **Start dates** (R-DATE-03): `cards.start_at` (a date, nullable, migration). A 422 when it's after `due_at`; the UI's picker keeps them in order, as the product does. `start_at: null` clears it. The card front and dialog show a range. No activity entry, matching the product (it publishes `card.updated` as usual for realtime).
+   - **Start dates** (R-DATE-03): `cards.start_at` (nullable, migration 0009). A timestamp like `due_at`, holding the start of the chosen day in the user's time zone, so the API can compare the two without knowing time zones. A 422 when it's after `due_at`; the UI's picker keeps them in order, as the product does. `start_at: null` clears it. The card front and dialog show a range. Built: the change is logged ("set the start date to Nov 18"), unlike the product, because every `card.updated` event writes an activity entry and skipping one kind would be a special case.
    - **Item assignees and due dates** (R-CHECK-05): `checklist_items.assignee_id` (a board member, else 422, through `resolve_assignees()`; cleared by `unassign_from_board()` when they leave) and `due_at`. Not added to the card's assignees. The card front adds the nearest open item's due date to its checklist count.
 
    Then, beyond the requirements: reorder checklist items (the API already takes `position`), and touch and keyboard dragging. Each starts as a requirement in `requirements.md`, then gets its build-plan row.

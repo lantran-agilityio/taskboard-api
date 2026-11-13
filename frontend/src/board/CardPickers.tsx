@@ -2,6 +2,13 @@ import { useState, type CSSProperties, type FormEvent } from "react";
 
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Popover } from "../components/Popover";
+import {
+  datesChange,
+  keepInOrder,
+  localParts,
+  type DatesChange,
+  type DatesForm,
+} from "./dates";
 import type { Card, Label, LabelColor, ListWithCards, Member } from "./model";
 
 export const COLORS: LabelColor[] = [
@@ -219,23 +226,14 @@ export function LabelEditor({
   );
 }
 
-function pad(n: number): string {
-  return String(n).padStart(2, "0");
-}
-
-/** "2026-11-12" and "16:08" for a date-time, in the browser's time zone. */
-function localParts(date: Date): { day: string; time: string } {
-  return {
-    day: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
-    time: `${pad(date.getHours())}:${pad(date.getMinutes())}`,
-  };
-}
-
 /**
- * Sets, changes or removes the due date and time (R-DATE-01). A new date
- * starts at tomorrow, at the current time; dates in the past are allowed.
+ * Sets, changes or removes the card's start and due dates (R-DATE-01,
+ * R-DATE-03). Each is ticked on or off. A start is a day, starting at today; a
+ * due date has a time and starts at tomorrow, at the current time (past dates
+ * are allowed). Changing one past the other moves the other, so they stay in
+ * order and the API's rule (a start never after the due date) always holds.
  */
-export function DuePopover({
+export function DatesPopover({
   card,
   anchor,
   onClose,
@@ -244,55 +242,100 @@ export function DuePopover({
   card: Card;
   anchor: HTMLElement | null;
   onClose: () => void;
-  onSave: (dueAt: string | null) => void;
+  onSave: (change: DatesChange) => void;
 }) {
-  // Read once, when the picker opens: its date, or tomorrow at this time.
-  const [start] = useState(() =>
-    localParts(
+  // Read once, when the picker opens.
+  const [form, setForm] = useState<DatesForm>(() => {
+    const due = localParts(
       card.due_at ? new Date(card.due_at) : new Date(Date.now() + 24 * 60 * 60 * 1000),
-    ),
-  );
-  const [day, setDay] = useState(start.day);
-  const [time, setTime] = useState(start.time);
+    );
+    const today = localParts(new Date()).day;
+    return {
+      hasStart: card.start_at !== null,
+      startDay: card.start_at ? localParts(new Date(card.start_at)).day : today,
+      // With no dates yet, the due date is ticked: it's the usual one to add.
+      hasDue: card.due_at !== null || card.start_at === null,
+      dueDay: due.day,
+      dueTime: due.time,
+    };
+  });
+
+  function change(changes: Partial<DatesForm>, changed: "start" | "due") {
+    setForm((current) => keepInOrder({ ...current, ...changes }, changed));
+  }
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!day || !time) return;
-    // Read as local time; sent with its offset (as UTC), which the API requires.
-    onSave(new Date(`${day}T${time}`).toISOString());
+    const changes = datesChange(card, form);
+    if (Object.keys(changes).length > 0) onSave(changes);
+    else onClose();
+  }
+
+  function removeAll() {
+    const changes: DatesChange = {};
+    if (card.start_at) changes.start_at = null;
+    if (card.due_at) changes.due_at = null;
+    onSave(changes);
   }
 
   return (
-    <Popover title="Due date" anchor={anchor} onClose={onClose}>
+    <Popover title="Dates" anchor={anchor} onClose={onClose}>
       <form className="blk" onSubmit={submit}>
         <div className="lab">
-          <label htmlFor="due-day">Date</label>
+          <label className="row">
+            <input
+              type="checkbox"
+              checked={form.hasStart}
+              onChange={(event) => change({ hasStart: event.target.checked }, "due")}
+            />
+            Start date
+          </label>
           <input
-            id="due-day"
             type="date"
             className="field"
-            required
-            value={day}
-            onChange={(event) => setDay(event.target.value)}
+            aria-label="Start day"
+            required={form.hasStart}
+            disabled={!form.hasStart}
+            value={form.startDay}
+            onChange={(event) => change({ startDay: event.target.value }, "start")}
           />
         </div>
         <div className="lab">
-          <label htmlFor="due-time">Time</label>
-          <input
-            id="due-time"
-            type="time"
-            className="field"
-            required
-            value={time}
-            onChange={(event) => setTime(event.target.value)}
-          />
+          <label className="row">
+            <input
+              type="checkbox"
+              checked={form.hasDue}
+              onChange={(event) => change({ hasDue: event.target.checked }, "start")}
+            />
+            Due date
+          </label>
+          <div className="row">
+            <input
+              type="date"
+              className="field"
+              aria-label="Due day"
+              required={form.hasDue}
+              disabled={!form.hasDue}
+              value={form.dueDay}
+              onChange={(event) => change({ dueDay: event.target.value }, "due")}
+            />
+            <input
+              type="time"
+              className="field"
+              aria-label="Due time"
+              required={form.hasDue}
+              disabled={!form.hasDue}
+              value={form.dueTime}
+              onChange={(event) => change({ dueTime: event.target.value }, "due")}
+            />
+          </div>
         </div>
         <div className="row">
           <button type="submit" className="btn primary">
             Save
           </button>
-          {card.due_at && (
-            <button type="button" className="btn" onClick={() => onSave(null)}>
+          {(card.start_at || card.due_at) && (
+            <button type="button" className="btn" onClick={removeAll}>
               Remove
             </button>
           )}

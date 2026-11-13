@@ -45,6 +45,9 @@ class Card(Base):
     description: Mapped[str | None] = mapped_column(Text)
     position: Mapped[int | None]
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
+    # Shown as a date; stored as the start of that day in the user's time zone,
+    # so it compares with due_at. Never after due_at (checked in the routes).
+    start_at: Mapped[datetime | None]
     due_at: Mapped[datetime | None]
     # server_default fills in the cards that existed before the column did.
     due_complete: Mapped[bool] = mapped_column(default=False, server_default=false())

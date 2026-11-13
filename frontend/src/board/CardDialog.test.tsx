@@ -250,14 +250,16 @@ describe("editing the card", () => {
     await screen.findByRole("dialog", { name: "Brief" });
 
     await user.click(dialog().getByRole("button", { name: "Add" }));
-    const picker = within(screen.getByRole("dialog", { name: "Due date" }));
+    const picker = within(screen.getByRole("dialog", { name: "Dates" }));
     const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const day = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
-    expect(picker.getByLabelText("Date")).toHaveValue(day);
-    await user.clear(picker.getByLabelText("Date"));
-    await user.type(picker.getByLabelText("Date"), "2026-12-01");
-    await user.clear(picker.getByLabelText("Time"));
-    await user.type(picker.getByLabelText("Time"), "09:30");
+    expect(picker.getByRole("checkbox", { name: "Due date" })).toBeChecked();
+    expect(picker.getByRole("checkbox", { name: "Start date" })).not.toBeChecked();
+    expect(picker.getByLabelText("Due day")).toHaveValue(day);
+    await user.clear(picker.getByLabelText("Due day"));
+    await user.type(picker.getByLabelText("Due day"), "2026-12-01");
+    await user.clear(picker.getByLabelText("Due time"));
+    await user.type(picker.getByLabelText("Due time"), "09:30");
     await user.click(picker.getByRole("button", { name: "Save" }));
 
     expect(bodiesOf(calls, "PATCH /cards/100")).toEqual([
@@ -265,11 +267,38 @@ describe("editing the card", () => {
     ]);
     await user.click(dialog().getByRole("button", { name: "Change" }));
     await user.click(
-      within(screen.getByRole("dialog", { name: "Due date" })).getByRole("button", {
+      within(screen.getByRole("dialog", { name: "Dates" })).getByRole("button", {
         name: "Remove",
       }),
     );
     expect(bodiesOf(calls, "PATCH /cards/100").at(-1)).toEqual({ due_at: null });
+  });
+
+  it("sets a start date alone, and keeps it before the due date", async () => {
+    const { calls } = serve({ "PATCH /cards/100": patchCard() });
+    const user = await open("#card-100");
+    await screen.findByRole("dialog", { name: "Brief" });
+
+    await user.click(dialog().getByRole("button", { name: "Add" }));
+    const picker = within(screen.getByRole("dialog", { name: "Dates" }));
+    await user.click(picker.getByRole("checkbox", { name: "Start date" }));
+    await user.click(picker.getByRole("checkbox", { name: "Due date" }));
+    expect(picker.getByLabelText("Due day")).toBeDisabled();
+    await user.clear(picker.getByLabelText("Start day"));
+    await user.type(picker.getByLabelText("Start day"), "2026-12-03");
+    await user.click(picker.getByRole("button", { name: "Save" }));
+
+    expect(bodiesOf(calls, "PATCH /cards/100")).toEqual([
+      { start_at: new Date("2026-12-03T00:00").toISOString() },
+    ]);
+
+    await user.click(dialog().getByRole("button", { name: "Change" }));
+    const again = within(screen.getByRole("dialog", { name: "Dates" }));
+    await user.click(again.getByRole("checkbox", { name: "Due date" }));
+    await user.clear(again.getByLabelText("Due day"));
+    await user.type(again.getByLabelText("Due day"), "2026-12-01");
+    // A due date before the start moves the start to the day before.
+    expect(again.getByLabelText("Start day")).toHaveValue("2026-11-30");
   });
 
   it("moves it to another list and position", async () => {
