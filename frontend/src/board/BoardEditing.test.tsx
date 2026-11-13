@@ -285,6 +285,31 @@ describe("typing fast", () => {
   });
 });
 
+describe("a role change while watching", () => {
+  it("takes the edit controls away when I become a viewer", async () => {
+    serve({}, { role: "editor" });
+    await openBoard();
+    expect(
+      screen.getByRole("button", { name: "+ Add another list" }),
+    ).toBeInTheDocument();
+
+    act(() =>
+      FakeWebSocket.latest().receive({
+        type: "member.updated",
+        board_id: 1,
+        actor_id: 2,
+        // Alice, who is signed in, is user 1.
+        data: { member: { user_id: 1, email: "alice@example.com", role: "viewer" } },
+      }),
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "+ Add another list" }),
+    ).not.toBeInTheDocument();
+    expect(lane("To do").queryByRole("button", { name: "+ Add a card" })).toBeNull();
+  });
+});
+
 describe("renaming", () => {
   it("renames a list in place with Enter", async () => {
     const { calls } = serve({
