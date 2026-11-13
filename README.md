@@ -205,4 +205,4 @@ GitHub Actions runs the same checks on every pull request and every push to `mai
 25. Frontend board view, editing: add, rename, drag, sort, mark done, archive
 26. Frontend card dialog: details (26a), then comments and activity (26b)
 27. Frontend board menu (27a: about, activity, archived items, labels, close) and sharing (27b)
-28. Frontend: checklists in the card dialog ([`docs/build-plan.md`](docs/build-plan.md#frontend-build-order))
+28. Frontend checklists in the card dialog: add, tick, hide ticked items, rename, edit and delete

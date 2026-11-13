@@ -11,6 +11,7 @@ import { Markdown } from "../components/Markdown";
 import { Popover } from "../components/Popover";
 import { timeAgo } from "../format";
 import { useSession } from "../auth/session";
+import { Checklists, useChecklists } from "./CardChecklists";
 import { CardFeed } from "./CardFeed";
 import { Avatar } from "./CardFront";
 import {
@@ -65,7 +66,7 @@ function dueText(iso: string): string {
   });
 }
 
-type Pop = "labels" | "members" | "due" | "move" | "menu";
+type Pop = "labels" | "members" | "due" | "move" | "menu" | "checklist";
 
 /**
  * A card opened at #card-<id>, over its board (R-CARD-03): its list, title,
@@ -108,6 +109,7 @@ export function CardDialog({
   const [fetched, setFetched] = useState<Card | null>(null);
   const [missing, setMissing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const checklists = useChecklists(cardId, token, attempt, subscribe);
   useEscape(onClose);
 
   const liveCard = findCard(data, cardId);
@@ -395,6 +397,24 @@ export function CardDialog({
                       )}
                     </div>
                   </section>
+                  <section className="detail" aria-label="Checklists">
+                    <h3>Checklists</h3>
+                    <div className="row">
+                      <ChecklistSummary lists={checklists.checklists} />
+                      {editable && (
+                        <button
+                          type="button"
+                          className="btn sm"
+                          aria-label="Add a checklist"
+                          onClick={(event) =>
+                            setPop({ kind: "checklist", anchor: event.currentTarget })
+                          }
+                        >
+                          Add
+                        </button>
+                      )}
+                    </div>
+                  </section>
                 </div>
 
                 <Description
@@ -404,6 +424,7 @@ export function CardDialog({
                     save("save the description", { description })
                   }
                 />
+                <Checklists handle={checklists} editable={editable} />
               </div>
               <aside className="dlg-side">
                 <CardFeed
@@ -520,6 +541,16 @@ export function CardDialog({
           }
         />
       )}
+      {card && pop?.kind === "checklist" && (
+        <AddChecklistPopover
+          anchor={pop.anchor}
+          onClose={() => setPop(null)}
+          onAdd={(title) => {
+            setPop(null);
+            void checklists.add(title);
+          }}
+        />
+      )}
       {card && pop?.kind === "menu" && (
         <Popover title="Card actions" anchor={pop.anchor} onClose={() => setPop(null)}>
           <div className="menu">
@@ -604,6 +635,65 @@ export function CardDialog({
         />
       )}
     </div>
+  );
+}
+
+function ChecklistSummary({
+  lists,
+}: {
+  lists: { items: { done: boolean }[] }[] | null;
+}) {
+  if (!lists) return null;
+  const items = lists.flatMap((list) => list.items);
+  if (lists.length === 0) return <span className="muted">None</span>;
+  return (
+    <span className="muted">
+      {items.filter((item) => item.done).length}/{items.length} done
+    </span>
+  );
+}
+
+/** Names a new checklist; "Checklist" is offered, selected, so typing replaces it (R-CHECK-01). */
+function AddChecklistPopover({
+  anchor,
+  onClose,
+  onAdd,
+}: {
+  anchor: HTMLElement;
+  onClose: () => void;
+  onAdd: (title: string) => void;
+}) {
+  const fieldId = useId();
+  const [title, setTitle] = useState("Checklist");
+  return (
+    <Popover title="Add a checklist" anchor={anchor} onClose={onClose}>
+      <form
+        className="blk"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onAdd(title.trim() || "Checklist");
+        }}
+      >
+        <label className="lab" htmlFor={fieldId}>
+          Title
+        </label>
+        <input
+          id={fieldId}
+          className="field"
+          maxLength={100}
+          autoComplete="off"
+          autoFocus
+          onFocus={(event) => event.currentTarget.select()}
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+        />
+        <div>
+          <button type="submit" className="btn primary">
+            Add
+          </button>
+        </div>
+      </form>
+    </Popover>
   );
 }
 

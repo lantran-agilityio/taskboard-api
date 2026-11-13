@@ -88,6 +88,7 @@ function serve(
       status: 200,
       body: { items: activity, next_before: null },
     },
+    "GET /cards/100/checklists": { status: 200, body: [] },
     ...routes,
   });
 }
