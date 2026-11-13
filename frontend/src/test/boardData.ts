@@ -13,6 +13,7 @@ export function card(id: number, listId: number, extra: Partial<Card> = {}): Car
     position: 0,
     created_at: "2026-11-01T00:00:00Z",
     archived_at: null,
+    start_at: null,
     due_at: null,
     due_complete: false,
     label_ids: [],

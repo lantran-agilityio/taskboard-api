@@ -11,6 +11,7 @@ import {
   type Context,
 } from "./activityText";
 import { boardInfo } from "../test/boardData";
+import { shortDay } from "./dates";
 
 const CONTEXT: Context = {
   lists: [list(1, "To do"), list(2, "Doing")],
@@ -43,6 +44,10 @@ group("describe", () => {
     [
       { due_at: "2026-11-20T10:00:00Z" },
       `set the due date to ${dueWords("2026-11-20T10:00:00Z")}`,
+    ],
+    [
+      { start_at: "2026-11-17T17:00:00Z" },
+      `set the start date to ${shortDay("2026-11-17T17:00:00Z")}`,
     ],
     [{ description: "Why" }, "changed the description"],
     [{ label_ids: [10] }, "added the label “Bug”"],
@@ -82,6 +87,23 @@ group("describe", () => {
     expect(describe(moved, { ...BASE, title: "Old" }, CONTEXT)).toBe(
       "moved this card from To do to Doing",
     );
+  });
+
+  it("removes a start date, and ignores entries from before start dates", () => {
+    const started = { ...BASE, start_at: "2026-11-17T17:00:00Z" };
+    expect(describe(entry("card.updated", { card: BASE }), started, CONTEXT)).toBe(
+      "removed the start date",
+    );
+    // An entry written before start dates existed has no start_at at all.
+    const older: Partial<typeof BASE> = { ...BASE };
+    delete older.start_at;
+    expect(
+      describe(
+        entry("card.updated", { card: { ...BASE, title: "New" } }),
+        older as typeof BASE,
+        CONTEXT,
+      ),
+    ).toBe("renamed this card from “Brief” to “New”");
   });
 
   it("falls back when there's nothing to compare with", () => {

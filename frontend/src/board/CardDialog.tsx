@@ -15,12 +15,13 @@ import { Checklists, useChecklists } from "./CardChecklists";
 import { CardFeed } from "./CardFeed";
 import { Avatar } from "./CardFront";
 import {
-  DuePopover,
+  DatesPopover,
   LabelChip,
   LabelsPopover,
   MembersPopover,
   MovePopover,
 } from "./CardPickers";
+import { datesText } from "./dates";
 import * as local from "./edits";
 import {
   dueState,
@@ -57,16 +58,7 @@ function findCard(data: BoardData, cardId: number): Card | undefined {
   return undefined;
 }
 
-function dueText(iso: string): string {
-  return new Date(iso).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-type Pop = "labels" | "members" | "due" | "move" | "menu" | "checklist";
+type Pop = "labels" | "members" | "dates" | "move" | "menu" | "checklist";
 
 /**
  * A card opened at #card-<id>, over its board (R-CARD-03): its list, title,
@@ -383,14 +375,19 @@ export function CardDialog({
                       )}
                     </div>
                   </section>
-                  <section className="detail" aria-label="Due date">
-                    <h3>Due date</h3>
+                  <section className="detail" aria-label="Dates">
+                    <h3>Dates</h3>
                     <div className="row">
                       {card.due_at && due ? (
                         <span className={`due ${due}`}>
                           <ClockIcon />
-                          {dueText(card.due_at)}
+                          {datesText(card)}
                           {DUE_WORD[due] && <b>{DUE_WORD[due]}</b>}
+                        </span>
+                      ) : card.start_at ? (
+                        <span className="due upcoming">
+                          <ClockIcon />
+                          {datesText(card)}
                         </span>
                       ) : (
                         <span className="muted">None</span>
@@ -400,10 +397,10 @@ export function CardDialog({
                           type="button"
                           className="btn sm"
                           onClick={(event) =>
-                            setPop({ kind: "due", anchor: event.currentTarget })
+                            setPop({ kind: "dates", anchor: event.currentTarget })
                           }
                         >
-                          {card.due_at ? "Change" : "Add"}
+                          {card.start_at || card.due_at ? "Change" : "Add"}
                         </button>
                       )}
                     </div>
@@ -526,13 +523,13 @@ export function CardDialog({
           }
         />
       )}
-      {card && pop?.kind === "due" && (
-        <DuePopover
+      {card && pop?.kind === "dates" && (
+        <DatesPopover
           card={card}
           anchor={pop.anchor}
           onClose={() => setPop(null)}
-          onSave={(dueAt) => {
-            save(dueAt ? "set the due date" : "remove the due date", { due_at: dueAt });
+          onSave={(changes) => {
+            save("change the dates", changes);
             setPop(null);
           }}
         />

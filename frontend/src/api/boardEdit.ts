@@ -68,6 +68,7 @@ export function createCard(
 export interface CardChange {
   title?: string;
   description?: string | null;
+  start_at?: string | null;
   due_at?: string | null;
   due_complete?: boolean;
   label_ids?: number[];

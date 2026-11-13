@@ -7,6 +7,7 @@
 
 import type { ActivityEntry } from "../api/comments";
 import type { Board } from "../api/boards";
+import { shortDay } from "./dates";
 import type { Card, Label, List, Member } from "./model";
 
 export type Scope = "card" | "board";
@@ -117,6 +118,14 @@ function cardChanges(
   }
   if (before.due_complete !== after.due_complete) {
     words.push(after.due_complete ? `marked ${it} done` : `marked ${it} not done`);
+  }
+  // Entries from before start dates existed have no start_at at all.
+  if ((before.start_at ?? null) !== (after.start_at ?? null)) {
+    words.push(
+      after.start_at
+        ? `set the start date${onIt} to ${shortDay(after.start_at)}`
+        : `removed the start date${fromIt}`,
+    );
   }
   if (before.due_at !== after.due_at) {
     words.push(

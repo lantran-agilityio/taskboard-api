@@ -68,6 +68,7 @@ def create_card(
         raise validation_error(
             "path", "list_id", "List is archived; restore it first", board_list.id
         )
+    check_dates(payload.start_at, payload.due_at, "start_at")
     labels, assignees = card_details(
         db, board_list.board, payload.label_ids, payload.assignee_ids
     )
@@ -75,6 +76,7 @@ def create_card(
         title=payload.title,
         description=payload.description,
         position=len(board_list.active_cards),
+        start_at=payload.start_at,
         due_at=payload.due_at,
         labels=labels,
         assignees=assignees,
@@ -136,6 +138,15 @@ def search_cards(
     return db.scalars(query).all()
 
 
+def check_dates(start_at: datetime | None, due_at: datetime | None, field: str) -> None:
+    """A 422 on `field` (the date the request changed) if the start is after the due date."""
+    if start_at is not None and due_at is not None and start_at > due_at:
+        value = start_at if field == "start_at" else due_at
+        raise body_validation_error(
+            field, "The start date can't be after the due date", value.isoformat()
+        )
+
+
 def card_data(card: Card) -> dict[str, Any]:
     return CardRead.model_validate(card).model_dump(mode="json")
 
@@ -183,6 +194,13 @@ def update_card(
         raise validation_error(
             "path", "card_id", "Card or its list is archived; restore it first", card.id
         )
+    sent = payload.model_fields_set
+    check_dates(
+        payload.start_at if "start_at" in sent else card.start_at,
+        payload.due_at if "due_at" in sent else card.due_at,
+        # Blame the start when it was sent, else the due date that moved before it.
+        "start_at" if "start_at" in sent else "due_at",
+    )
     labels, assignees = card_details(
         db, card.board_list.board, payload.label_ids, payload.assignee_ids
     )
@@ -207,9 +225,11 @@ def update_card(
     if payload.title is not None:
         card.title = payload.title
     # Checked by name, because description=None means "clear it".
-    if "description" in payload.model_fields_set:
+    if "description" in sent:
         card.description = payload.description
-    if "due_at" in payload.model_fields_set:
+    if "start_at" in sent:
+        card.start_at = payload.start_at
+    if "due_at" in sent:
         card.due_at = payload.due_at
     if payload.due_complete is not None:
         card.due_complete = payload.due_complete

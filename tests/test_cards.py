@@ -689,6 +689,117 @@ def test_invalid_details_cancel_the_whole_update(client: TestClient) -> None:
     assert card_titles(client, second) == ["X", "Y"]
 
 
+# Start dates (R-DATE-03): start_at, never after due_at.
+
+START = "2026-11-18T00:00:00+07:00"
+START_UTC = "2026-11-17T17:00:00Z"
+
+
+def test_new_card_has_no_start(client: TestClient) -> None:
+    _, list_id = card_board(client)
+
+    assert create_card(client, list_id)["start_at"] is None
+
+
+def test_create_card_with_start_and_due(client: TestClient) -> None:
+    _, list_id = card_board(client)
+
+    card = create_card(client, list_id, start_at=START, due_at=DUE)
+
+    assert card["start_at"] == START_UTC
+    assert card["due_at"] == DUE_UTC
+
+
+def test_start_without_due(client: TestClient) -> None:
+    _, list_id = card_board(client)
+    card = create_card(client, list_id)
+
+    response = client.patch(f"/cards/{card['id']}", json={"start_at": START})
+
+    assert response.status_code == 200
+    assert response.json()["start_at"] == START_UTC
+    assert response.json()["due_at"] is None
+
+
+def test_start_equal_to_due_is_allowed(client: TestClient) -> None:
+    _, list_id = card_board(client)
+
+    card = create_card(client, list_id, start_at=DUE, due_at=DUE)
+
+    assert card["start_at"] == card["due_at"] == DUE_UTC
+
+
+def test_clear_start_and_leave_it_out(client: TestClient) -> None:
+    _, list_id = card_board(client)
+    card = create_card(client, list_id, start_at=START, due_at=DUE)
+
+    kept = client.patch(f"/cards/{card['id']}", json={"due_at": None}).json()
+    cleared = client.patch(f"/cards/{card['id']}", json={"start_at": None}).json()
+
+    assert kept["start_at"] == START_UTC
+    assert cleared["start_at"] is None
+
+
+@pytest.mark.parametrize(
+    ("existing", "payload", "field"),
+    [
+        # A new start after the card's due date.
+        ({"due_at": START}, {"start_at": DUE}, "start_at"),
+        # A new due date before the card's start.
+        ({"start_at": DUE}, {"due_at": START}, "due_at"),
+        # Both at once, the wrong way round: the start is blamed.
+        ({}, {"start_at": DUE, "due_at": START}, "start_at"),
+    ],
+)
+def test_start_after_due_is_rejected(
+    client: TestClient, existing: dict, payload: dict, field: str
+) -> None:
+    _, list_id = card_board(client)
+    card = create_card(client, list_id, **existing)
+
+    response = client.patch(f"/cards/{card['id']}", json=payload)
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["body", field]
+    assert client.get(f"/cards/{card['id']}").json() == card
+
+
+def test_create_card_with_start_after_due(client: TestClient) -> None:
+    _, list_id = card_board(client)
+
+    response = client.post(
+        f"/lists/{list_id}/cards",
+        json={"title": "C", "start_at": DUE, "due_at": START},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["body", "start_at"]
+    assert cards_in(client, list_id) == []
+
+
+def test_start_needs_a_time_zone(client: TestClient) -> None:
+    _, list_id = card_board(client)
+    card = create_card(client, list_id)
+
+    response = client.patch(
+        f"/cards/{card['id']}", json={"start_at": "2026-11-18T00:00:00"}
+    )
+
+    assert response.status_code == 422
+
+
+def test_start_change_is_in_the_event(client: TestClient) -> None:
+    board_id, list_id = card_board(client)
+    card = create_card(client, list_id)
+
+    client.patch(f"/cards/{card['id']}", json={"start_at": START})
+
+    entry = client.get(f"/boards/{board_id}/activity").json()["items"][0]
+    assert entry["type"] == "card.updated"
+    assert entry["data"]["card"]["start_at"] == START_UTC
+    assert entry["data"]["previous"] == {"start_at": None}
+
+
 def test_moving_a_card_keeps_its_details(client: TestClient) -> None:
     first, second, cards = two_lists(client)
     board_id = client.get(f"/lists/{first}").json()["board_id"]

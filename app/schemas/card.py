@@ -21,6 +21,7 @@ IdSet = Annotated[
 class CardCreate(BaseModel):
     title: Name
     description: Description | None = None
+    start_at: AwareDatetime | None = None
     due_at: AwareDatetime | None = None
     label_ids: IdSet = []
     assignee_ids: IdSet = []
@@ -32,7 +33,8 @@ class CardUpdate(BaseModel):
     description: Description | None = None
     list_id: int | None = Field(default=None, ge=1, strict=True)
     position: int | None = Field(default=None, ge=0, strict=True)
-    # null clears the due date; leaving it out keeps it, like description.
+    # null clears the date; leaving it out keeps it, like description.
+    start_at: AwareDatetime | None = None
     due_at: AwareDatetime | None = None
     due_complete: bool | None = Field(default=None, strict=True)
     # Each replaces the card's whole set; [] clears it.
@@ -67,6 +69,7 @@ class CardRead(BaseModel):
     position: int | None  # None while archived
     created_at: UtcDatetime
     archived_at: UtcDatetime | None
+    start_at: UtcDatetime | None
     due_at: UtcDatetime | None
     due_complete: bool
     label_ids: list[int]
