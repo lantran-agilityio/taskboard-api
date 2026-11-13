@@ -575,9 +575,9 @@ As a member, I can read a card's own history in the card, with system events (su
 
 **Design decisions for the build plan** (not for the product to answer):
 
-10. **Restoring:** the product restores lists to their original position; the API restores to the end.
+10. **Restoring:** the product restores lists and cards beside their old neighbours; the API restored to the end before step 19, and now to the old index (D1).
 11. **Deleting:** the product deletes only after archiving and erases a deleted card's history; the API deletes directly and keeps a "deleted" entry in the log.
 12. **Empty rename:** the product silently keeps the old name; the API returns 422.
-13. **Roles:** the product allows several admins (now confirmed, R-MEMBER-05); the API has exactly one owner plus editors and viewers.
+13. **Roles:** the product allows several admins (now confirmed, R-MEMBER-05); the API has exactly one owner plus editors and viewers. Kept in step 31 (D5).
 14. **Labels:** the product has 30 colours, unnamed labels and labels without a colour; the API has 6 colours and requires names.
 15. **Boards:** closing a board is a new state the API doesn't have.
