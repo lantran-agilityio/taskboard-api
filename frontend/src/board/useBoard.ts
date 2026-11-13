@@ -40,7 +40,8 @@ export function errorMessage(error: unknown): string {
 
 /** One board's data, loaded from the API and kept live over the WebSocket. */
 export function useBoard(boardId: number, token: string): BoardHandle {
-  const { signOut } = useSession();
+  const { session, signOut } = useSession();
+  const myId = session.status === "signedIn" ? session.user.id : undefined;
   const [view, setView] = useState<View>({ status: "loading" });
   const [live, setLive] = useState<SocketStatus>("connecting");
   // The current connection's load function, for reload() from the page.
@@ -98,7 +99,7 @@ export function useBoard(boardId: number, token: string): BoardHandle {
           members,
         };
         const missed = pending;
-        for (const event of missed) data = applyEvent(data, event);
+        for (const event of missed) data = applyEvent(data, event, myId);
         loaded = true;
         setView({ status: "ready", data });
         missed.forEach((event) => {
@@ -136,7 +137,7 @@ export function useBoard(boardId: number, token: string): BoardHandle {
         // other, which changes nothing when the screen already shows them,
         // and keeps your other tabs in step.
         if (loaded) {
-          update((data) => applyEvent(data, event));
+          update((data) => applyEvent(data, event, myId));
           runFollowUp(event);
         }
         listeners.current.forEach((listener) => listener(event));
@@ -154,7 +155,7 @@ export function useBoard(boardId: number, token: string): BoardHandle {
       cancelled = true;
       socket.stop();
     };
-  }, [boardId, token, signOut, update]);
+  }, [boardId, token, myId, signOut, update]);
 
   const reload = useCallback(() => loadRef.current(), []);
   const subscribe = useCallback((listener: (event: BoardEvent) => void) => {

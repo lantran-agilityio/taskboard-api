@@ -124,7 +124,12 @@ function mapCards(
 }
 
 /** The board after one event. Returns the same object for events it ignores. */
-export function applyEvent(data: BoardData, event: BoardEvent): BoardData {
+export function applyEvent(
+  data: BoardData,
+  event: BoardEvent,
+  /** The signed-in user, so a change to their own role reaches the board. */
+  myId?: number,
+): BoardData {
   const d = event.data;
   switch (event.type) {
     case "board.updated":
@@ -171,11 +176,14 @@ export function applyEvent(data: BoardData, event: BoardEvent): BoardData {
       };
 
     case "member.added":
-    case "member.updated":
-      return {
-        ...data,
-        members: upsert(data.members, d.member, (a, b) => a.user_id === b.user_id),
-      };
+    case "member.updated": {
+      const members = upsert(data.members, d.member, (a, b) => a.user_id === b.user_id);
+      // My own role changed: the board's role decides which controls I get.
+      if (myId !== undefined && d.member.user_id === myId) {
+        return { ...data, members, board: { ...data.board, role: d.member.role } };
+      }
+      return { ...data, members };
+    }
     case "member.removed":
       // Leaving a board also unassigns that person from its cards.
       return {

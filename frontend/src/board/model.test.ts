@@ -190,6 +190,18 @@ describe("applyEvent", () => {
     expect(next.lists[0]?.cards[1]?.assignee_ids).toEqual([]);
   });
 
+  it("changes my own role on the board when the event is about me", () => {
+    const start = boardData([], { board: boardInfo({ role: "editor" }) });
+    const demoted = event("member.updated", {
+      member: { user_id: 2, email: "bob@example.com", role: "viewer" },
+    });
+
+    // About someone else (I'm 1): my role stays.
+    expect(applyEvent(start, demoted, 1).board.role).toBe("editor");
+    // About me (I'm 2).
+    expect(applyEvent(start, demoted, 2).board.role).toBe("viewer");
+  });
+
   it("leaves the board alone for events it doesn't apply", () => {
     expect(
       applyEvent(START, event("comment.updated", { comment: { card_id: 100 } })),
