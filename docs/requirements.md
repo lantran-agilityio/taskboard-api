@@ -1,12 +1,12 @@
 # Requirements
 
-Written in roadmap step 13 from [`observations/`](observations/) (boards, lists, cards and card details, observed 2026-11-09). Design sessions read this file only, never the product.
+Written in roadmap step 13 from [`observations/`](observations/) (boards, lists, cards and card details, observed 2026-11-09), and updated in step 31 after a second observe session with two accounts (2026-11-13, which added [`members.md`](observations/members.md)). Design sessions read this file only, never the product.
 
 ## IDs and status
 
 - **ID:** `R-<AREA>-<NN>`. Areas: `BOARD`, `MEMBER`, `LIST`, `CARD`, `LABEL`, `DATE`, `CHECK` (checklists), `COMMENT`, `ACTIVITY`. `AUTH`, `SEARCH` and `REALTIME` weren't observed; the API already has them.
 - **Status:** `confirmed` (seen in an observation) or `unconfirmed` (inferred; check in the next observe session).
-- **Roles** in the user stories: *member* is anyone on the board who can edit; *admin* is a member who manages the board. The observations only saw a board with one admin, so read-only roles aren't covered.
+- **Roles** in the user stories: *member* is anyone on the board who can edit; *admin* is a member who manages the board; *observer* is the read-only role (a paid feature in the product). A board can have several admins (R-MEMBER-05).
 
 ## Template
 
@@ -47,7 +47,7 @@ As a <role>, I can <action> so that <reason>.
 | R-BOARD-02 | Create a board | confirmed | boards.md |
 | R-BOARD-03 | Rename a board in place | confirmed | boards.md |
 | R-BOARD-04 | Star a board | confirmed | boards.md |
-| R-BOARD-05 | Board description | unconfirmed | boards.md |
+| R-BOARD-05 | Board description | confirmed | boards.md, members.md |
 | R-BOARD-06 | Close a board | confirmed | boards.md |
 | R-BOARD-07 | See and reopen closed boards | confirmed | boards.md |
 | R-BOARD-08 | Delete a closed board | confirmed | boards.md |
@@ -55,8 +55,11 @@ As a <role>, I can <action> so that <reason>.
 | R-MEMBER-02 | Invite a member | confirmed | boards.md |
 | R-MEMBER-03 | See board members | confirmed | boards.md |
 | R-MEMBER-04 | At least one admin | confirmed | boards.md |
-| R-MEMBER-05 | Several admins | unconfirmed | boards.md |
-| R-MEMBER-06 | Leave a board | unconfirmed | boards.md |
+| R-MEMBER-05 | Several admins | confirmed | members.md |
+| R-MEMBER-06 | Leave a board | confirmed | members.md |
+| R-MEMBER-07 | Observer role | confirmed (paid) | members.md |
+| R-MEMBER-08 | Change roles and remove people | confirmed | members.md |
+| R-MEMBER-09 | Who may comment and invite | confirmed | members.md |
 | R-LIST-01 | Add lists quickly | confirmed | lists.md |
 | R-LIST-02 | Rename a list in place | confirmed | lists.md |
 | R-LIST-03 | Reorder lists | confirmed | lists.md |
@@ -64,7 +67,7 @@ As a <role>, I can <action> so that <reason>.
 | R-LIST-05 | Sort a list once | confirmed | lists.md |
 | R-LIST-06 | Archive a list | confirmed | lists.md |
 | R-LIST-07 | Restore an archived list | confirmed | lists.md |
-| R-LIST-08 | Delete an archived list | unconfirmed | lists.md |
+| R-LIST-08 | Delete an archived list | confirmed | lists.md |
 | R-CARD-01 | Add cards quickly | confirmed | cards.md |
 | R-CARD-02 | Card front shows a summary | confirmed | cards.md, card-details.md |
 | R-CARD-03 | Open a card at its own address | confirmed | cards.md |
@@ -82,16 +85,16 @@ As a <role>, I can <action> so that <reason>.
 | R-LABEL-05 | Delete a label | confirmed | card-details.md |
 | R-DATE-01 | Set a due date | confirmed | card-details.md |
 | R-DATE-02 | Due state on the card | confirmed | card-details.md |
-| R-DATE-03 | Start date | unconfirmed | card-details.md |
+| R-DATE-03 | Start date | confirmed | card-details.md |
 | R-CHECK-01 | Add a checklist | confirmed | card-details.md |
 | R-CHECK-02 | Add and tick items | confirmed | card-details.md |
 | R-CHECK-03 | Hide ticked items | confirmed | card-details.md |
 | R-CHECK-04 | Delete a checklist | confirmed | card-details.md |
-| R-CHECK-05 | Item assignee and due date | unconfirmed | card-details.md |
+| R-CHECK-05 | Item assignee and due date | confirmed (paid) | card-details.md |
 | R-CARD-11 | Assign members to a card | confirmed | card-details.md |
 | R-COMMENT-01 | Comment on a card | confirmed | card-details.md |
-| R-COMMENT-02 | Edit my comment | confirmed | card-details.md |
-| R-COMMENT-03 | Delete my comment | confirmed | card-details.md |
+| R-COMMENT-02 | Edit my comment | confirmed | card-details.md, members.md |
+| R-COMMENT-03 | Delete my comment | confirmed | card-details.md, members.md |
 | R-COMMENT-04 | Link to a comment | confirmed | card-details.md |
 | R-ACTIVITY-01 | Board activity log | confirmed | boards.md |
 | R-ACTIVITY-02 | Card activity log | confirmed | cards.md, card-details.md |
@@ -105,7 +108,8 @@ As a <role>, I can <action> so that <reason>.
 As a user, I can see every board I'm on, so that I can open one.
 
 - Acceptance: the home screen lists my open boards as tiles with their names.
-- Acceptance: recently opened boards appear in their own row.
+- Acceptance: recently opened boards appear in their own row, most recent first.
+- Acceptance: the main list of boards is in alphabetical order.
 - Acceptance: closed boards don't appear here (see R-BOARD-07).
 - Source: observations/boards.md · Status: confirmed
 
@@ -120,7 +124,7 @@ As a user, I can create a board with a title, so that I can start organising wor
 
 #### R-BOARD-03: Rename a board in place
 
-As an admin, I can click the board's title and edit it in place, so that renaming is quick.
+As an admin, I can click the board's title and edit it in place, so that renaming is quick. Members and observers can't.
 
 - Acceptance: Enter saves; the new title shows in the header and the page title.
 - Acceptance: saving an empty title keeps the old one, with no error.
@@ -132,15 +136,17 @@ As an admin, I can click the board's title and edit it in place, so that renamin
 As a user, I can star or unstar a board from its header, so that I can mark the boards I use most.
 
 - Acceptance: the star toggles and shows its state.
-- Acceptance: a starred board is easier to find on the home screen. Unconfirmed: how they are shown.
+- Acceptance: starred boards get their own section at the top of the home screen, and still show (with a filled star) in the other sections.
+- Acceptance: stars are per person; starring doesn't change the board for anyone else.
 - Source: observations/boards.md · Status: confirmed
 
 #### R-BOARD-05: Board description
 
 As a member, I can read and edit a short description of the board, so that everyone knows its purpose.
 
-- Acceptance: the board menu has an "about" entry that shows the description.
-- Source: observations/boards.md · Status: unconfirmed (only the menu entry was seen)
+- Acceptance: the board menu has an "about" entry that shows the description and names the board's admins.
+- Acceptance: members and admins can edit it; observers only read it.
+- Source: observations/boards.md, members.md · Status: confirmed
 
 #### R-BOARD-06: Close a board
 
@@ -164,8 +170,8 @@ As an admin, I can see my closed boards in one place and reopen any of them, so 
 As an admin, I can permanently delete a board, but only once it's closed, so that deleting is never one click away from an open board.
 
 - Acceptance: open boards have no delete action.
-- Acceptance: deleting asks for confirmation (wording unconfirmed).
-- Source: observations/boards.md · Status: confirmed (the confirmation itself wasn't seen)
+- Acceptance: deleting asks once, warning that its lists, cards and history are deleted with no undo. It doesn't ask for the board's name.
+- Source: observations/boards.md · Status: confirmed
 
 ### Members
 
@@ -180,15 +186,16 @@ As a user who creates a board, I become its admin, so that someone can always ma
 As an admin, I can invite someone by email or name and choose their role, so that we can work on the board together.
 
 - Acceptance: the share dialog has an invite field, a role choice and an invite button.
-- Acceptance: a read-only role exists in the product, but it was locked on the observed plan (unconfirmed for us).
-- Source: observations/boards.md · Status: confirmed
+- Acceptance: the role choice is Member or Observer (R-MEMBER-07). Admin can't be chosen when inviting; it's given afterwards (R-MEMBER-05).
+- Source: observations/boards.md, members.md · Status: confirmed
 
 #### R-MEMBER-03: See board members
 
 As a member, I can see who is on the board and their roles, so that I know who I'm working with.
 
-- Acceptance: the share dialog lists the members with their roles.
-- Source: observations/boards.md · Status: confirmed
+- Acceptance: the share dialog lists the members with their roles, my own row first.
+- Acceptance: everyone on the board can open it; only admins can change roles.
+- Source: observations/boards.md, members.md · Status: confirmed
 
 #### R-MEMBER-04: At least one admin
 
@@ -199,15 +206,42 @@ As the only admin, I can't step down or leave, so that a board is never left wit
 
 #### R-MEMBER-05: Several admins
 
-As an admin, I can make another member an admin too.
+As an admin, I can make another member an admin too, so that more than one person can manage the board.
 
-- Source: observations/boards.md · Status: unconfirmed (implied by "at least one admin"; needs a second account)
+- Acceptance: each other person's role menu offers Admin; the change applies at once, without a confirmation.
+- Acceptance: Admin is unavailable, with the reason, for someone whose account isn't confirmed yet.
+- Acceptance: with two admins, either can step down or leave, and either can change or remove the other.
+- Source: observations/members.md · Status: confirmed
 
 #### R-MEMBER-06: Leave a board
 
-As a member who isn't the last admin, I can leave a board.
+As anyone on a board who isn't its last admin, I can leave it.
 
-- Source: observations/boards.md · Status: unconfirmed (only seen disabled for the last admin)
+- Acceptance: "Leave board" is in the board menu and in my own role menu, after a confirmation that I'll be taken off every card on the board.
+- Acceptance: afterwards a private board is closed to me; opening it offers to ask the admins to join.
+- Source: observations/members.md · Status: confirmed
+
+#### R-MEMBER-07: Observer role
+
+As an admin, I can give someone the observer role, so that they can follow the board without changing it.
+
+- Acceptance: an observer sees the board, lists, cards, comments, activity and archived items, but gets no add, edit, move or archive controls, no card details and no comment box.
+- Acceptance: an observer can still star and watch the board, and leave it.
+- Source: observations/members.md · Status: confirmed (a paid feature in the product, seen on a trial)
+
+#### R-MEMBER-08: Change roles and remove people
+
+As an admin, I can change anyone else's role or remove them from the board.
+
+- Acceptance: members and observers see everyone's role but can't change any, except leaving themselves.
+- Source: observations/members.md · Status: confirmed
+
+#### R-MEMBER-09: Who may comment and invite
+
+As an admin, I can choose who may comment (nobody, members, or members and observers) and who may add or remove people (admins, or all members).
+
+- Acceptance: by default members comment and members may invite.
+- Source: observations/members.md · Status: confirmed
 
 ### Lists
 
@@ -263,15 +297,17 @@ As a member, I can archive a list after a short confirmation, so that it's hidde
 As a member, I can restore an archived list.
 
 - Acceptance: it comes back at its original position, with its cards in their order.
-- Source: observations/lists.md · Status: confirmed (what happens when other lists moved in the meantime is unconfirmed)
+- Acceptance: if other lists moved meanwhile, it comes back beside the lists that were its neighbours, not at its old index.
+- Source: observations/lists.md · Status: confirmed
 
 #### R-LIST-08: Delete an archived list
 
 As a member, I can permanently delete a list, but only once it's archived.
 
 - Acceptance: active lists have no delete action.
-- Acceptance: what happens to its cards and what the confirmation says is unconfirmed.
-- Source: observations/lists.md · Status: unconfirmed
+- Acceptance: one confirmation warns that its cards and their history are deleted with it, with no undo.
+- Acceptance: the board's log keeps a single "deleted list" entry; the list's earlier entries are removed.
+- Source: observations/lists.md · Status: confirmed
 
 ### Cards
 
@@ -337,14 +373,16 @@ As a member, I can archive a card without a confirmation, so that finished work 
 - Acceptance: the card leaves its list. It shows in the board's archived items, under cards.
 - Acceptance: opening it shows when it was archived. Its details can't be changed, and its menu offers Restore and Delete.
 - Acceptance: a done card offers archive straight from the board.
-- Source: observations/cards.md · Status: confirmed (whether an archived card can take new comments is unconfirmed)
+- Acceptance: an archived card can still take new comments.
+- Source: observations/cards.md · Status: confirmed
 
 #### R-CARD-09: Restore an archived card
 
 As a member, I can restore an archived card to its list.
 
 - Acceptance: it's logged as "sent to the board".
-- Source: observations/cards.md · Status: confirmed (its position in a list with several cards is unconfirmed)
+- Acceptance: it comes back beside the cards that were its neighbours, not at the end.
+- Source: observations/cards.md · Status: confirmed
 
 #### R-CARD-10: Delete an archived card
 
@@ -360,7 +398,7 @@ As a member, I can assign board members to a card.
 - Acceptance: the picker searches the board's members only.
 - Acceptance: assignees show as avatars in the card and on its front.
 - Acceptance: assigning myself is logged as joining the card.
-- Source: observations/card-details.md · Status: confirmed (assigning other people is unconfirmed)
+- Source: observations/card-details.md · Status: confirmed (assigning other people is unconfirmed; leaving a board takes you off its cards, R-MEMBER-06)
 
 ### Labels
 
@@ -419,9 +457,13 @@ As a member, I can tell at a glance whether a card is overdue or complete.
 
 #### R-DATE-03: Start date
 
-As a member, I can give a card a start date as well as a due date.
+As a member, I can give a card a start date as well as, or instead of, a due date.
 
-- Source: observations/card-details.md · Status: unconfirmed (only the optional field was seen)
+- Acceptance: a start date is a date with no time, defaulting to today.
+- Acceptance: it's allowed without a due date; the card then shows when it started.
+- Acceptance: the start is never after the due date: changing one moves the other to keep them in order.
+- Acceptance: with both, the card shows a range. Setting a start date isn't logged.
+- Source: observations/card-details.md · Status: confirmed
 
 ### Checklists
 
@@ -457,7 +499,10 @@ As a member, I can delete a whole checklist.
 
 As a member, I can give a checklist item its own assignee and due date.
 
-- Source: observations/card-details.md · Status: unconfirmed (the controls were seen, not used)
+- Acceptance: the assignee is one of the board's members. It isn't added to the card's members, and it isn't logged.
+- Acceptance: the due date has a time and may be later than the card's own due date.
+- Acceptance: the item row shows both, and the card's front adds the nearest item due date to its checklist count.
+- Source: observations/card-details.md · Status: confirmed (a paid feature in the product, seen on a trial)
 
 ### Comments
 
@@ -474,13 +519,15 @@ As a member, I can write a formatted comment on a card.
 As the author, I can edit my comment in place, with Save and "discard changes".
 
 - Acceptance: an edited comment is marked "(edited)".
-- Source: observations/card-details.md · Status: confirmed (whether others can edit it is unconfirmed)
+- Acceptance: nobody else can edit it, admins included.
+- Source: observations/card-details.md, members.md · Status: confirmed
 
 #### R-COMMENT-03: Delete my comment
 
 As the author, I can delete my comment after a confirmation that it's permanent.
 
-- Source: observations/card-details.md · Status: confirmed (whether admins can delete others' comments is unconfirmed)
+- Acceptance: an admin can delete anyone's comment; other members can't.
+- Source: observations/card-details.md, members.md · Status: confirmed
 
 #### R-COMMENT-04: Link to a comment
 
@@ -507,23 +554,30 @@ As a member, I can read a card's own history in the card, with system events (su
 
 ## Open questions
 
-**For the next observe session** (most need a second account):
+**Answered in the second observe session (2026-11-13):**
 
-1. What can a non-admin member do and see: the board menu, the share dialog, others' comments?
-2. Can an admin edit or delete other people's comments?
-3. Is there a read-only role on the free plan, and what can it do?
-4. Where does a restored card land in a list with several cards? Where does a restored list land if other lists moved meanwhile?
-5. Deleting an archived list: what happens to its cards, and what does it confirm? Deleting a closed board: what does it confirm?
-6. Can an archived card take new comments?
-7. Are there length limits on board, list and card titles and on label names? Are surrounding spaces trimmed?
-8. How are starred boards shown on the home screen, and how are boards sorted there?
-9. Is a start date allowed without a due date? Must the start come before the due date?
+1. *What can a non-admin member do and see?* Everything an admin can on lists, cards and comments, plus the board description and inviting people (by default). Not: renaming, visibility, closing, roles, settings. See R-MEMBER-07 and [`members.md`](observations/members.md).
+2. *Can an admin edit or delete other people's comments?* Delete yes, edit no (R-COMMENT-02, R-COMMENT-03).
+3. *Is there a read-only role on the free plan?* The Observer role exists but is a paid feature; it was used on a trial (R-MEMBER-07).
+4. *Where do restored cards and lists land?* Beside their old neighbours, not at their old index and not at the end (R-LIST-07, R-CARD-09).
+5. *Deleting an archived list or a closed board?* One confirmation each. A list's cards and history go with it; the log keeps one "deleted list" entry (R-LIST-08). A board's deletion doesn't ask for its name (R-BOARD-08).
+6. *Can an archived card take new comments?* Yes (R-CARD-08).
+7. *Length limits and trimming?* List names: trimmed, at most 512 characters. Label names: trimmed, no limit seen at 150. Board names: not trimmed, 600 characters accepted. Card titles: not trimmed, at most 16,384.
+8. *Starred boards and order on home?* A starred section at the top; boards in alphabetical order; recently viewed most recent first (R-BOARD-01, R-BOARD-04).
+9. *Start dates?* Allowed without a due date, and never after the due date (R-DATE-03).
+
+**For a later observe session:**
+
+- Can an observer restore archived items, and with "members and observers" commenting, can they comment?
+- Does removing someone (rather than them leaving) take them off cards, and are they told?
+- Does a role change reach the other person's open page without a reload?
+- Are duplicate label names allowed?
 
 **Design decisions for the build plan** (not for the product to answer):
 
 10. **Restoring:** the product restores lists to their original position; the API restores to the end.
 11. **Deleting:** the product deletes only after archiving and erases a deleted card's history; the API deletes directly and keeps a "deleted" entry in the log.
 12. **Empty rename:** the product silently keeps the old name; the API returns 422.
-13. **Roles:** the product allows several admins; the API has exactly one owner plus editors and viewers.
+13. **Roles:** the product allows several admins (now confirmed, R-MEMBER-05); the API has exactly one owner plus editors and viewers.
 14. **Labels:** the product has 30 colours, unnamed labels and labels without a colour; the API has 6 colours and requires names.
 15. **Boards:** closing a board is a new state the API doesn't have.

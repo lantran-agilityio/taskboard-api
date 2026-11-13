@@ -1,6 +1,6 @@
 # Observation: lists
 
-- **Observed:** 2026-11-09
+- **Observed:** 2026-11-09; second session 2026-11-13 (restore position, deleting, name limits)
 - **Account and plan:** free workspace, on the scratch board from [boards.md](boards.md). Features marked as paid were noted but not explored.
 
 ## What a user can do
@@ -31,8 +31,10 @@
 - A name of only spaces creates nothing.
 - Renaming a list to an empty name keeps the old name, with no error message, the same as boards.
 - After a move or a drag, the other lists close the gap, so positions stay continuous.
-- Restoring a list puts it back at its **original position**, not at the end, with its cards in the same order.
+- Restoring a list puts it back at its **original position**, not at the end, with its cards in the same order. More exactly (2026-11-13): it goes back **beside the lists that were its neighbours**, not at its old index. With To Do, Doing, Done, Extra, archiving Doing and then moving Extra to the front gave Extra, To Do, Done; restoring Doing gave Extra, To Do, **Doing**, Done (3rd, where it had been 2nd). Restoring asks for no confirmation.
 - A list can only be deleted once it has been archived. There is no delete in the normal list menu.
+- **Deleting an archived list** (2026-11-13) asks once, in a small popover: its cards and all their history go with it, permanently, and it can't be reopened. Afterwards the board's log keeps a single "deleted list <name>" entry; the list's earlier entries (added, archived, and the cards added to it) are gone. Its cards don't appear among the archived cards.
+- **List names** (2026-11-13) are trimmed: "   Spare   " is saved as "Spare". The name field stops at 512 characters.
 - In the card "move" form, the target-list dropdown is in alphabetical order, not board order.
 
 ## Edge cases, empty and error states
@@ -42,8 +44,5 @@
 
 ## Open questions
 
-- What does deleting an archived list confirm, and are its cards deleted too? (Not tried; permanent.)
-- How does restore keep the "original position" once other lists have moved in the meantime?
 - What do "copy list", "move all cards" and "archive all cards" do exactly?
-- Is there a limit on list name length?
 - What do pinned lists do?

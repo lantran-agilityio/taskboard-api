@@ -1,6 +1,6 @@
 # Observation: card details
 
-- **Observed:** 2026-11-09
+- **Observed:** 2026-11-09; second session 2026-11-13 (start dates, checklist item assignees and dates, label names, comments by others)
 - **Account and plan:** free workspace, on Card C of the scratch board from [boards.md](boards.md). The board has one member, so assigning other people was not seen. Attachments and the AI checklist (paid) were noted but not tried.
 
 ## What a user can do
@@ -16,6 +16,7 @@
   - "Remove colour" makes a label with no colour.
   - A label created from a card's picker is applied to that card straight away.
 - **Editing a label** changes its title and colour. Deleting it asks for confirmation.
+- **Label titles** (2026-11-13) are trimmed, and the field has no length limit: a 150-character title was kept whole.
 
 ### Dates
 
@@ -26,6 +27,11 @@
   - a "recurring" choice (default never),
   - a due-date reminder (default one day before; sent to the card's members and watchers),
   - Save and Remove.
+- **Start date** (2026-11-13): a date with no time, defaulting to today when ticked.
+  - It can be set **without a due date**; the card then shows "Started: <date>" and the details section is titled "Start date". "Recurring" is greyed out without a due date.
+  - **Start never comes after due.** Setting the due date before the start moves the start to the day before the due date; setting the start after the due date moves the due date to the day after. The picker can't be saved with them the wrong way round.
+  - With both, the card's front and details show a range ("Nov 20 – Nov 21, 3:33 PM").
+  - Setting a start date is **not logged**; only the due date is ("set this card to be due …").
 - **Due badge on the card's front:**
   - a past due date is allowed, and the badge turns red with an "overdue" tag;
   - marking the card done turns it green with a "complete" tag.
@@ -35,7 +41,9 @@
 - **Adding:** a card can have checklists, each with a title (default "Checklist").
 - **Items:**
   - they're added one after another, and the field stays open between them;
-  - each item can also take its own assignee and due date.
+  - each item can also take its own assignee and due date. These are a **paid** feature ("advanced checklists"); they worked on 2026-11-13 only because of the trial. Both can be set while adding an item or later from the item's row.
+  - **Item assignee:** picked from the board's members. It shows as an avatar on the item row. It does **not** add the person to the card's members, and it isn't logged.
+  - **Item due date:** a date and time (no start date), with a reminder sent to the item's assignee. It may be later than the card's own due date. It shows on the item row, and the card's front checklist badge adds the nearest item date ("0/1 • Nov 25").
 - **Ticking an item** strikes it through and updates a percentage bar. A "hide checked items" toggle appears, and the card's front shows done/total (e.g. 1/2).
 - **A checklist can be deleted** as a whole.
 
@@ -50,6 +58,7 @@
 - **Display:** comments show newest first, mixed with activity entries. Each one shows the author, a relative time, a reaction button, Edit and Delete.
 - **Editing** happens in place, with Save and "discard changes". An edited comment is marked "(edited)".
 - **Each comment has its own link.**
+- **Others' comments** (2026-11-13, two accounts): a member sees only a reaction button and Reply on someone else's comment. An admin can **delete** others' comments but **not edit** them; Edit stays with the author. An observer can't write comments (with the board's default setting), but still had Edit and Delete on a comment written earlier as a member. Writing a comment ticks "watch" for the writer. See [members.md](members.md).
 - **The card's front** shows a comment count.
 
 ## States
@@ -76,9 +85,7 @@
 
 ## Open questions
 
-- Can a non-author edit or delete someone else's comment? What can a board admin do to others' comments? (This needs a second account.)
 - How are reminders delivered, and what does "recurring" do on the free plan?
-- Is a start date allowed without a due date, and must the start come before the due date?
 - How do @mentions in comments work, and who gets notified?
 - How do checklist items convert to cards, and can items be reordered?
-- Does a label's title have a length limit? Are duplicate names allowed?
+- Are duplicate label names allowed?
