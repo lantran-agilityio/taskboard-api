@@ -134,6 +134,17 @@ export function CardDialog({
     };
   }, [liveCard === undefined, cardId, token, fetched?.archived_at]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Deleted while open, by anyone. An archived card isn't on the board, so
+  // the board's own update can't show that it's gone.
+  useEffect(
+    () =>
+      subscribe((event) => {
+        if (event.type === "card.deleted" && event.data?.card_id === cardId)
+          setMissing(true);
+      }),
+    [subscribe, cardId],
+  );
+
   useEffect(() => {
     const opener =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
