@@ -1,7 +1,7 @@
 # Observation: boards
 
-- **Observed:** 2026-11-09
-- **Account and plan:** free workspace with one existing board. A scratch board was created for this session. Features marked as paid were noted but not explored.
+- **Observed:** 2026-11-09; second session 2026-11-13 with a second account (members, roles, home page, deleting)
+- **Account and plan:** free workspace with one existing board. A scratch board was created for this session. Features marked as paid were noted but not explored. On 2026-11-13 the account was on a **premium trial** (14 days left), so some paid features (Observer role, item assignees and dates) could be used; they are marked as paid here.
 
 ## What a user can do
 
@@ -37,7 +37,7 @@
   - Add/edit controls and most header tools disappear.
   - It leaves the workspace list and the "recently viewed" row.
   - It appears in a "closed boards" dialog, which has a filter, and each row has Reopen and Delete.
-- **Starred:** shown by the filled toggle in the header. Whether starred boards get their own home-page section is unconfirmed.
+- **Starred:** shown by the filled toggle in the header. On the home page (2026-11-13), starred boards get their own **Starred boards** section at the top, above "recently viewed", and still appear in the other sections with a filled star on the tile.
 - **Empty closed-boards list:** shows "no boards have been closed".
 
 ## Rules
@@ -45,8 +45,11 @@
 - A title of only spaces counts as empty. The create button stays disabled and a "title is required" hint shows.
 - Clearing the title while renaming and saving changes nothing: the old title comes back, with no error message.
 - After a rename, the browser tab title updates, but the URL slug keeps the old name.
+- **Board names** (2026-11-13) keep surrounding spaces (the tab title shows them trimmed). The field has no length limit; a 600-character name was accepted.
+- **Home page order** (2026-11-13): a workspace's board tiles are in alphabetical order (a board created last but named "Alpha" came first); "recently viewed" is most recent first.
+- **Deleting a closed board** (2026-11-13) asks once, in a small popover, that all its lists, cards and history will be deleted with no undo and it can't be reopened. It doesn't ask for the board's name. A short "board deleted" notice follows, and the closed-boards list says none are closed.
 - The creator becomes the board's admin.
-- **At least one admin:** a board always has at least one admin. The only admin can't step down to member or leave, and those options are disabled with that reason. Unlike our API's single owner, more than one admin seems allowed (unconfirmed).
+- **At least one admin:** a board always has at least one admin. The only admin can't step down to member or leave, and those options are disabled with that reason. More than one admin **is** allowed (confirmed 2026-11-13 with a second account; see [members.md](members.md)), unlike our API's single owner.
 - **Visibility:**
   - Private: only board members see it; workspace admins can still close it or remove members.
   - Workspace: everyone in the workspace can see and edit it.
@@ -62,9 +65,5 @@
 
 ## Open questions
 
-- What does Delete confirm, and does deleting ask for the board name? (Not tried yet. Deleting is permanent and needs the user's go-ahead.)
-- Maximum title length, and whether surrounding spaces are trimmed on rename.
-- How the workspace's board tiles are sorted: alphabetically or by creation?
-- How starred boards are shown on the home page.
-- What a non-admin member sees in the board menu and the Share dialog. This needs a second account.
+- What a non-admin member sees in the board menu and the Share dialog: answered in [members.md](members.md).
 - Copy board: what is copied (lists, cards, members, labels)?
