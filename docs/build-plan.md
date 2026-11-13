@@ -22,6 +22,7 @@ These settle the six design questions from `requirements.md` and the choices the
 | D10 | Comments on archived cards | **Not allowed** (the API's 422 stays). | It matches the frozen-card rule. Step 31 found the product does allow them (R-CARD-08), so this is now a deliberate difference: an archived card stays fully read-only. |
 | D11 | Start dates, checklist item assignees and dates | **Both move to step 32.** Start dates (R-DATE-03): a date with no time, allowed without a due date, never after the due date. Item assignees and due dates (R-CHECK-05). | Step 21 left both out while they were unconfirmed. Step 31 confirmed them (item assignees and dates are a paid feature in the product), so they're now ordinary requirements, built after the core screens. |
 | D12 | Frontend stack | **Approved (2026-11-11):** a separate `frontend/` app (Vite, React, TypeScript) that talks to the API over HTTP and the WebSocket, with its own CI job. In development Vite proxies `/api` to the API, so the API needs no CORS. | It's a common, well-documented stack, and it keeps the API and the UI testable on their own. |
+| D13 | Touch and keyboard dragging (R-CARD-12, R-CARD-13, R-LIST-09, R-CHECK-06) | **No drag library, no API change.** The mouse keeps the browser's own drag and drop. **Touch** uses pointer events: a press held for 400 ms picks the item up (so a tap still opens a card and a swipe still scrolls), it then follows the finger, and the drop place comes from the same `dropIndex()` as the mouse. **Keyboard** uses a pick-up mode: Space on a focused card, list name or checklist item picks it up, the arrow keys move it in the page without saving, Space drops it (one `PATCH` with the new position, through the same `change()` as a drag) and Escape puts it back; every step is announced in a polite live region. One shared hook (`useReorder`) gives all three kinds of item the same keys and words. | The API already takes positions for lists, cards, checklists and items, so this is frontend only. Keeping native drag and drop for the mouse leaves step 25's tested code alone; a library would replace it and add a dependency. A pick-up mode is the usual accessible pattern for reordering, and nothing is saved mid-move, so a cancelled move costs no requests. |
 
 ## Coverage
 
@@ -56,6 +57,7 @@ This table is the plan as written before steps 16–21; those steps closed every
 | R-LIST-06 Archive a list | `POST /lists/{id}/archive` | ✓ | | — |
 | R-LIST-07 Restore to original position | `POST /lists/{id}/restore` | ◐ | It restores at the end today (D1) | 19 |
 | R-LIST-08 Delete an archived list | `DELETE /lists/{id}` | ✓ | The UI gates it (D2); its cards are deleted too | — |
+| R-LIST-09 Move a list by touch or keyboard *(added in step 32)* | `PATCH /lists/{id}` `position` | ✓ | Frontend only (D13) | 32 |
 | R-CARD-01 Add cards quickly | `POST /lists/{id}/cards` | ✓ | | — |
 | R-CARD-02 Card front summary | `GET /lists/{id}/cards` | ◐ | Comment count; checklist progress | 20, 21 |
 | R-CARD-03 Own address | `GET /cards/{id}` | ✓ | Uses the card id (D9) | — |
@@ -67,6 +69,8 @@ This table is the plan as written before steps 16–21; those steps closed every
 | R-CARD-09 Restore a card | `POST /cards/{id}/restore` | ◐ | Original position (D1) | 19 |
 | R-CARD-10 Delete an archived card | `DELETE /cards/{id}` | ✓ | The UI gates it; the history is kept (D2, D3) | — |
 | R-CARD-11 Assign members | `PATCH /cards/{id}` `assignee_ids` | ✓ | | — |
+| R-CARD-12 Move a card by touch *(added in step 32)* | `PATCH /cards/{id}` `list_id`, `position` | ✓ | Frontend only (D13) | 32 |
+| R-CARD-13 Move a card with the keyboard *(added in step 32)* | Same | ✓ | Frontend only (D13) | 32 |
 | R-LABEL-01 Default labels | — | ✗ | Seed on board create (D6) | 16 |
 | R-LABEL-02 Apply labels | `PATCH /cards/{id}` `label_ids` | ✓ | | — |
 | R-LABEL-03 Create a label | `POST /boards/{id}/labels` | ◐ | Optional name (D6) | 16 |
@@ -80,6 +84,7 @@ This table is the plan as written before steps 16–21; those steps closed every
 | R-CHECK-03 Hide ticked items | — | ✗ | Client-side once 21 exists | 21 |
 | R-CHECK-04 Delete a checklist | — | ✗ | Checklists | 21 |
 | R-CHECK-05 Item assignee and due date | — | ✗ | `assignee_id`, `due_at` on checklist items (D11). Done in step 32 | 32 |
+| R-CHECK-06 Reorder checklists and items *(added in step 32)* | `PATCH /checklists/{id}` and `/checklist-items/{id}` `position` | ✓ | Frontend only (D13) | 32 |
 | R-COMMENT-01 Comment on a card | `POST /cards/{id}/comments` | ✓ | The count on the card front comes in 20 | 20 |
 | R-COMMENT-02 Edit my comment | `PATCH /comments/{id}` (author), `edited_at` | ✓ | | — |
 | R-COMMENT-03 Delete my comment | `DELETE /comments/{id}` | ✓ | | — |
@@ -147,6 +152,7 @@ Done on 2026-11-13 against `main` after step 28: the real app (API and Vite dev 
 | R-LIST-06 Archive a list | Archive this list…, confirmed; shows under Archived items → Lists | ✓ | clicked |
 | R-LIST-07 Restore to original position | Restore puts it back where it was | ✓ | clicked |
 | R-LIST-08 Delete an archived list | Only from Archived items, after a warning | ✓ | clicked, tests |
+| R-LIST-09 Move a list by touch or keyboard *(step 32)* | — | not built yet | — |
 | R-CARD-01 Add cards quickly | + Add a card; stays open; Escape or spaces close it | ◐ fast typing loses titles (issue 3) | clicked |
 | R-CARD-02 Card front summary | Labels, done check, due badge, checklist done/total, comment count, description icon, avatars | ✓ | clicked |
 | R-CARD-03 Own address | `#card-<id>` dialog over the board with list, details, description, comments and activity | ✓ (D9) | clicked |
@@ -158,6 +164,8 @@ Done on 2026-11-13 against `main` after step 28: the real app (API and Vite dev 
 | R-CARD-09 Restore a card | Logged "sent this card to the board"; back at its old position | ✓ | clicked |
 | R-CARD-10 Delete an archived card | Delete for good…, warns it's permanent | ✓ (D3: the log keeps a note) | tests |
 | R-CARD-11 Assign members | Members picker searches board members; avatars; "joined this card" | ✓ | clicked |
+| R-CARD-12 Move a card by touch *(step 32)* | — | not built yet | — |
+| R-CARD-13 Move a card with the keyboard *(step 32)* | — | not built yet | — |
 | R-LABEL-01 Default labels | Six unnamed colours on a new board | ✓ | clicked |
 | R-LABEL-02 Apply labels | Picker with search, in colour order | ✓ | clicked |
 | R-LABEL-03 Create a label | From the picker or Menu → Labels; applied to the card at once | ✓ | tests |
@@ -168,6 +176,7 @@ Done on 2026-11-13 against `main` after step 28: the real app (API and Vite dev 
 | R-DATE-03 Start date *(step 32)* | Card → Dates: start and due ticked on or off, kept in order; a range on the card | ✓ (logged, unlike the product) | tests |
 | R-CHECK-01 to R-CHECK-04 | Checklists in the card dialog (step 28) | ✓ | clicked (step 28), tests |
 | R-CHECK-05 Item assignee and due date *(step 32)* | Item options: assignee and due date; shown on the row; the card front adds the next item due | ✓ (set from the item's options, not while adding it) | tests |
+| R-CHECK-06 Reorder checklists and items *(step 32)* | — | not built yet | — |
 | R-COMMENT-01 Comment on a card | Composer at the top; name and relative time; mixed with activity; front count | ✓ | clicked |
 | R-COMMENT-02 Edit my comment | Edit, Save, "Discard changes", "(edited)" | ✓ | tests |
 | R-COMMENT-03 Delete my comment | After a confirmation | ✓ | tests |
@@ -220,7 +229,10 @@ Added on 2026-11-13, once step 28 was merged. Each is its own branch and PR.
    - **Start dates** (R-DATE-03): `cards.start_at` (nullable, migration 0009). A timestamp like `due_at`, holding the start of the chosen day in the user's time zone, so the API can compare the two without knowing time zones. A 422 when it's after `due_at`; the UI's picker keeps them in order, as the product does. `start_at: null` clears it. The card front and dialog show a range. Built: the change is logged ("set the start date to Nov 18"), unlike the product, because every `card.updated` event writes an activity entry and skipping one kind would be a special case.
    - **Item assignees and due dates** (R-CHECK-05): `checklist_items.assignee_id` (a board member, else 422, through `resolve_assignees()`; cleared by `unassign_from_board()` when they leave) and `due_at` (migration 0010). Not added to the card's assignees. The card front adds the nearest open item's due date to its checklist count (`CardRead.checklist_due_at`). Built: set from the item's options panel; the API also takes both when adding an item, but the add form stays a single text field so items can still be typed one after another.
 
-   Then, beyond the requirements: reorder checklist items (the API already takes `position`), and touch and keyboard dragging. Each starts as a requirement in `requirements.md`, then gets its build-plan row.
+   Then the requirements step 32 added (`ours` in `requirements.md`), all frontend only (D13), each its own branch and PR:
+   - **Reorder checklists and items** (R-CHECK-06), by mouse and keyboard: drag items within their checklist and checklists within the card, with `useReorder` introduced here.
+   - **Keyboard moves for cards and lists** (R-CARD-13, R-LIST-09's keyboard part), reusing `useReorder`; left and right move a card into the neighbouring list.
+   - **Touch dragging** (R-CARD-12, R-LIST-09's touch part, and R-CHECK-06 by touch): pointer events with a 400 ms hold, edge scrolling, and tests with stubbed `PointerEvent`s, as the drag tests stub `DragEvent`.
 
 ## Risks and open questions
 
