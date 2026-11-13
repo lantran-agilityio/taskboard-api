@@ -25,11 +25,14 @@ def user_id(client: TestClient, headers: dict | None = None) -> int:
     return client.get("/users/me", headers=headers).json()["id"]
 
 
-def test_new_board_has_no_activity(client: TestClient, board: dict) -> None:
-    response = client.get(f"/boards/{board['id']}/activity")
+def test_new_board_logs_its_creation(client: TestClient, board: dict) -> None:
+    entries = activity(client, board["id"])
 
-    assert response.status_code == 200
-    assert response.json() == {"items": [], "next_before": None}
+    assert [entry["type"] for entry in entries] == ["board.created"]
+    assert entries[0]["actor_id"] == user_id(client)
+    assert entries[0]["data"]["board"]["name"] == "Project X"
+    # Per-caller fields stay out, as in every board event.
+    assert "starred" not in entries[0]["data"]["board"]
 
 
 def test_changes_are_logged_newest_first(client: TestClient, board: dict) -> None:
@@ -53,6 +56,7 @@ def test_changes_are_logged_newest_first(client: TestClient, board: dict) -> Non
         "card.created",
         "list.created",
         "list.created",
+        "board.created",
     ]
 
 
@@ -62,7 +66,7 @@ def test_entry_has_the_events_data_and_actor(client: TestClient, board: dict) ->
     ).json()
     client.delete(f"/lists/{board_list['id']}")
 
-    [deleted, created] = activity(client, board["id"])
+    [deleted, created, _board_created] = activity(client, board["id"])
 
     assert deleted == {
         "id": deleted["id"],
@@ -83,7 +87,7 @@ def test_member_changes_are_logged_with_their_actor(
     # Bob leaves on his own.
     client.delete(f"/boards/{board['id']}/members/{bob_id}", headers=other_headers)
 
-    [removed, added] = activity(client, board["id"])
+    [removed, added, _board_created] = activity(client, board["id"])
 
     assert (removed["type"], removed["actor_id"]) == ("member.removed", bob_id)
     assert (added["type"], added["actor_id"]) == ("member.added", user_id(client))
@@ -97,7 +101,7 @@ def test_rejected_request_logs_nothing(client: TestClient, board: dict) -> None:
     response = client.patch(f"/lists/{board_list['id']}", json={"position": 5})
 
     assert response.status_code == 422
-    assert types(client, board["id"]) == ["list.created"]
+    assert types(client, board["id"]) == ["list.created", "board.created"]
 
 
 def test_activity_is_paginated(client: TestClient, board: dict) -> None:
@@ -113,7 +117,9 @@ def test_activity_is_paginated(client: TestClient, board: dict) -> None:
 
     assert names(first) == ["E", "D", "C"]
     assert first["next_before"] == first["items"][-1]["id"]
-    assert names(rest) == ["B", "A"]
+    assert names({"items": rest["items"][:2]}) == ["B", "A"]
+    # The board's own creation is the oldest entry.
+    assert rest["items"][2]["type"] == "board.created"
     assert rest["next_before"] is None
 
 
@@ -121,7 +127,7 @@ def test_activity_is_per_board(client: TestClient, board: dict) -> None:
     other = client.post("/boards", json={"name": "Other"}).json()
     client.post(f"/boards/{other['id']}/lists", json={"name": "Elsewhere"})
 
-    assert activity(client, board["id"]) == []
+    assert types(client, board["id"]) == ["board.created"]
 
 
 def test_viewer_reads_activity(
@@ -131,7 +137,7 @@ def test_viewer_reads_activity(
 
     entries = activity(client, board["id"], headers=other_headers)
 
-    assert [entry["type"] for entry in entries] == ["member.added"]
+    assert [entry["type"] for entry in entries] == ["member.added", "board.created"]
 
 
 def test_non_member_gets_404(

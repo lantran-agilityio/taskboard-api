@@ -129,6 +129,15 @@ group("previousStates", () => {
     expect(states.get(item.id)).toBeNull();
     expect(states.get(moved.id)).toEqual(BASE);
   });
+
+  it("starts a board's history at its creation, so its first rename has the old name", () => {
+    const created = entry("board.created", { board: { name: "Launch" } });
+    const renamed = entry("board.updated", { board: { name: "Big launch" } });
+
+    expect(previousStates([renamed, created]).get(renamed.id)).toEqual({
+      name: "Launch",
+    });
+  });
 });
 
 group("the board's log", () => {
@@ -242,6 +251,7 @@ group("the board's log", () => {
       boardInfo(),
       "changed the board's description",
     ],
+    ["board.created", { board: boardInfo() }, null, "created the board"],
     ["board.closed", { board: boardInfo() }, null, "closed the board"],
     ["board.reopened", { board: boardInfo() }, null, "reopened the board"],
   ])("%s reads %j", (type, data, previous, words) => {

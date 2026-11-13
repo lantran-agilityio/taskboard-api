@@ -13,6 +13,7 @@ CHANNEL = "board_events"
 
 
 class EventType(StrEnum):
+    BOARD_CREATED = "board.created"
     BOARD_UPDATED = "board.updated"
     BOARD_DELETED = "board.deleted"
     BOARD_CLOSED = "board.closed"
