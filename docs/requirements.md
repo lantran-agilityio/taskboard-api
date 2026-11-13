@@ -5,7 +5,7 @@ Written in roadmap step 13 from [`observations/`](observations/) (boards, lists,
 ## IDs and status
 
 - **ID:** `R-<AREA>-<NN>`. Areas: `BOARD`, `MEMBER`, `LIST`, `CARD`, `LABEL`, `DATE`, `CHECK` (checklists), `COMMENT`, `ACTIVITY`. `AUTH`, `SEARCH` and `REALTIME` weren't observed; the API already has them.
-- **Status:** `confirmed` (seen in an observation) or `unconfirmed` (inferred; check in the next observe session).
+- **Status:** `confirmed` (seen in an observation), `unconfirmed` (inferred; check in the next observe session), or `ours` (our own addition, not taken from the product; added in roadmap step 32).
 - **Roles** in the user stories: *member* is anyone on the board who can edit; *admin* is a member who manages the board; *observer* is the read-only role (a paid feature in the product). A board can have several admins (R-MEMBER-05).
 
 ## Template
@@ -68,6 +68,7 @@ As a <role>, I can <action> so that <reason>.
 | R-LIST-06 | Archive a list | confirmed | lists.md |
 | R-LIST-07 | Restore an archived list | confirmed | lists.md |
 | R-LIST-08 | Delete an archived list | confirmed | lists.md |
+| R-LIST-09 | Move a list by touch or keyboard | ours | — |
 | R-CARD-01 | Add cards quickly | confirmed | cards.md |
 | R-CARD-02 | Card front shows a summary | confirmed | cards.md, card-details.md |
 | R-CARD-03 | Open a card at its own address | confirmed | cards.md |
@@ -91,7 +92,10 @@ As a <role>, I can <action> so that <reason>.
 | R-CHECK-03 | Hide ticked items | confirmed | card-details.md |
 | R-CHECK-04 | Delete a checklist | confirmed | card-details.md |
 | R-CHECK-05 | Item assignee and due date | confirmed (paid) | card-details.md |
+| R-CHECK-06 | Reorder checklists and their items | ours | — |
 | R-CARD-11 | Assign members to a card | confirmed | card-details.md |
+| R-CARD-12 | Move a card by touch | ours | — |
+| R-CARD-13 | Move a card with the keyboard | ours | — |
 | R-COMMENT-01 | Comment on a card | confirmed | card-details.md |
 | R-COMMENT-02 | Edit my comment | confirmed | card-details.md, members.md |
 | R-COMMENT-03 | Delete my comment | confirmed | card-details.md, members.md |
@@ -309,6 +313,15 @@ As a member, I can permanently delete a list, but only once it's archived.
 - Acceptance: the board's log keeps a single "deleted list" entry; the list's earlier entries are removed.
 - Source: observations/lists.md · Status: confirmed
 
+#### R-LIST-09: Move a list by touch or keyboard
+
+As a member on a phone or without a mouse, I can move a list the same ways as a card (R-CARD-12, R-CARD-13), so that dragging isn't the only quick way.
+
+- Acceptance: touch: press and hold a list's header, then drag it sideways; the board scrolls sideways near its edges.
+- Acceptance: keyboard: from the list's name, pick it up, move it left or right, and drop or cancel, with each step announced.
+- Acceptance: the Move list form (R-LIST-03) stays as the other alternative.
+- Source: — · Status: ours
+
 ### Cards
 
 #### R-CARD-01: Add cards quickly
@@ -399,6 +412,24 @@ As a member, I can assign board members to a card.
 - Acceptance: assignees show as avatars in the card and on its front.
 - Acceptance: assigning myself is logged as joining the card.
 - Source: observations/card-details.md · Status: confirmed (assigning other people is unconfirmed; leaving a board takes you off its cards, R-MEMBER-06)
+
+#### R-CARD-12: Move a card by touch
+
+As a member on a touch screen, I can drag a card as I would with a mouse (R-CARD-06).
+
+- Acceptance: pressing and holding a card picks it up; a quick tap still opens it, and a swipe still scrolls.
+- Acceptance: while it's held, it follows the finger, the place it would land is shown, and the board scrolls near its edges.
+- Acceptance: letting go drops it there; dropping outside any list puts it back.
+- Source: — · Status: ours
+
+#### R-CARD-13: Move a card with the keyboard
+
+As a member who doesn't use a mouse, I can move a card from the keyboard.
+
+- Acceptance: on a focused card, one key picks it up; the up and down arrows move it within its list, left and right into the neighbouring list; one key drops it and Escape puts it back.
+- Acceptance: each step is announced to screen readers ("Picked up Brief, position 2 of 4 in To do", "Moved to Doing, position 1 of 3", "Dropped" or "Cancelled").
+- Acceptance: nothing is saved until it's dropped; the move form (R-CARD-07) stays as the other alternative.
+- Source: — · Status: ours
 
 ### Labels
 
@@ -503,6 +534,15 @@ As a member, I can give a checklist item its own assignee and due date.
 - Acceptance: the due date has a time and may be later than the card's own due date.
 - Acceptance: the item row shows both, and the card's front adds the nearest item due date to its checklist count.
 - Source: observations/card-details.md · Status: confirmed (a paid feature in the product, seen on a trial)
+
+#### R-CHECK-06: Reorder checklists and their items
+
+As a member, I can change the order of a card's checklists, and of the items in a checklist, so that the steps read in the order they'll be done.
+
+- Acceptance: items are dragged within their checklist, and checklists within the card, by mouse, touch or keyboard, the same ways as cards (R-CARD-06, R-CARD-12, R-CARD-13).
+- Acceptance: an item doesn't move between checklists.
+- Acceptance: read-only for those who can't edit the card, as the rest of its checklists.
+- Source: — · Status: ours (the observations left open whether the product can reorder items)
 
 ### Comments
 
