@@ -1,6 +1,7 @@
 import { useRef, useState, type DragEvent, type FormEvent } from "react";
 
 import { DotsIcon } from "../components/icons";
+import { plural } from "../format";
 import { InlineEdit } from "../components/InlineEdit";
 import { CardFront, type CardActions } from "./CardFront";
 import { dropIndex, type Span } from "./dnd";
@@ -114,7 +115,7 @@ export function ListColumn({
             onSave={(name) => actions?.onRename(list.id, name)}
           />
         </h2>
-        <span className="count" title={`${list.cards.length} cards`}>
+        <span className="count" title={plural(list.cards.length, "card")}>
           {list.cards.length}
         </span>
         {actions && (

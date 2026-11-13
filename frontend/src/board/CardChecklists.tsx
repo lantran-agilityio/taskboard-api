@@ -4,6 +4,7 @@ import * as api from "../api/checklists";
 import type { Checklist, ChecklistItem } from "../api/checklists";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { DotsIcon } from "../components/icons";
+import { plural } from "../format";
 import { InlineEdit } from "../components/InlineEdit";
 import { Popover } from "../components/Popover";
 import type { Attempt } from "./CardDialog";
@@ -214,11 +215,9 @@ export function Checklists({
       {confirm && (
         <ConfirmDialog
           title={`Delete the checklist “${confirm.title}”?`}
-          message={
-            confirm.items.length === 1
-              ? "Its item is deleted too. This can't be undone."
-              : `Its ${confirm.items.length} items are deleted too. This can't be undone.`
-          }
+          message={`Its ${plural(confirm.items.length, "item")} ${
+            confirm.items.length === 1 ? "is" : "are"
+          } deleted too. This can't be undone.`}
           confirmLabel="Delete checklist"
           onCancel={() => setConfirm(null)}
           onConfirm={() => {

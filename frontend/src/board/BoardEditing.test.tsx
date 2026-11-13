@@ -191,6 +191,7 @@ describe("adding", () => {
 
     expect(titles("Done")).toEqual(["Ship it", "Celebrate"]);
     expect(lane("Done").getByTitle("2 cards")).toHaveTextContent("2");
+    expect(lane("Doing").getByTitle("1 card")).toHaveTextContent("1");
 
     await user.type(screen.getByRole("textbox", { name: "Card title" }), "  {Enter}");
     expect(
