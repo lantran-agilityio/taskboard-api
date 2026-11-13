@@ -77,3 +77,4 @@ class CardRead(BaseModel):
     comment_count: int
     checklist_done: int
     checklist_total: int
+    checklist_due_at: UtcDatetime | None

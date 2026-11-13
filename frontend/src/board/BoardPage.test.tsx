@@ -25,6 +25,9 @@ const LISTS: ListWithCards[] = [
       title: "Book venue",
       due_at: "2020-01-01T10:00:00Z",
       due_complete: true,
+      checklist_done: 0,
+      checklist_total: 2,
+      checklist_due_at: "2026-11-25T12:00:00Z",
     }),
   ]),
   list(2, "Done", []),
@@ -113,6 +116,10 @@ describe("the board page", () => {
       within(venue).getByRole("button", { name: "Mark not done" }),
     ).toHaveAttribute("aria-pressed", "true");
     expect(within(venue).getByText("Complete")).toBeInTheDocument();
+    // The checklist badge adds the nearest open item's due date (R-CHECK-05).
+    expect(
+      within(venue).getByTitle("Checklist items done, and the next item due"),
+    ).toHaveTextContent("0/2 • Nov 25");
   });
 
   it("applies live events", async () => {

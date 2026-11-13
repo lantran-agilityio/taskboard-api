@@ -36,6 +36,8 @@ export interface Card {
   comment_count: number;
   checklist_done: number;
   checklist_total: number;
+  /** The nearest due date among its unticked checklist items. */
+  checklist_due_at: string | null;
 }
 
 export interface List {

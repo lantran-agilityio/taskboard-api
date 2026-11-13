@@ -23,6 +23,7 @@ from app.schemas.checklist import (
     ItemCreate,
     ItemUpdate,
 )
+from app.services.card_details import resolve_assignees
 from app.services.ordering import move_item, remove_item
 
 # Checklists are added and read through their card...
@@ -65,6 +66,16 @@ def publish_checklist(
         },
         actor_id=actor_id,
     )
+
+
+def check_assignee(card: Card, assignee_id: int | None, db: Session) -> None:
+    """A 422 on assignee_id unless that user is on the card's board."""
+    if assignee_id is None:
+        return
+    try:
+        resolve_assignees(db, card.board_list.board, [assignee_id])
+    except ValueError as error:
+        raise body_validation_error("assignee_id", str(error), assignee_id) from error
 
 
 def publish_item(
@@ -186,7 +197,13 @@ def create_item(
     db: Session = Depends(get_db),
 ) -> ChecklistItem:
     check_not_frozen(checklist.card, "checklist_id", checklist.id)
-    item = ChecklistItem(text=payload.text, position=len(checklist.items))
+    check_assignee(checklist.card, payload.assignee_id, db)
+    item = ChecklistItem(
+        text=payload.text,
+        position=len(checklist.items),
+        assignee_id=payload.assignee_id,
+        due_at=payload.due_at,
+    )
     checklist.items.append(item)
     db.flush()  # gives the new item its id for the event
     publish_item(db, EventType.CHECKLIST_ITEM_CREATED, item, user.id)
@@ -204,6 +221,9 @@ def update_item(
 ) -> ChecklistItem:
     checklist = item.checklist
     check_not_frozen(checklist.card, "item_id", item.id)
+    sent = payload.model_fields_set
+    if "assignee_id" in sent:
+        check_assignee(checklist.card, payload.assignee_id, db)
     # Move first: if the position is invalid, nothing has changed yet.
     if payload.position is not None:
         try:
@@ -218,6 +238,11 @@ def update_item(
         item.text = payload.text
     if payload.done is not None:
         item.done = payload.done
+    # Checked by name, because None means "clear it".
+    if "assignee_id" in sent:
+        item.assignee_id = payload.assignee_id
+    if "due_at" in sent:
+        item.due_at = payload.due_at
     db.flush()
     publish_item(db, EventType.CHECKLIST_ITEM_UPDATED, item, user.id)
     db.commit()

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Checklist, ChecklistItem } from "../api/checklists";
-import { applyChecklistEvent, progress } from "./checklists";
+import { applyChecklistEvent, isOverdue, progress } from "./checklists";
 import type { BoardEvent } from "./model";
 
 function item(
@@ -17,6 +17,8 @@ function item(
     done,
     position,
     created_at: "2026-11-13T00:00:00Z",
+    assignee_id: null,
+    due_at: null,
   };
 }
 
@@ -110,5 +112,17 @@ describe("progress", () => {
       total: 3,
       percent: 33,
     });
+  });
+});
+
+describe("isOverdue", () => {
+  const due = { ...item(1, 7), due_at: "2026-11-20T10:00:00Z" };
+  const after = new Date("2026-11-21T00:00:00Z").getTime();
+
+  it("is true only for an unticked item past its due date", () => {
+    expect(isOverdue(due, after)).toBe(true);
+    expect(isOverdue({ ...due, done: true }, after)).toBe(false);
+    expect(isOverdue(due, new Date("2026-11-19T00:00:00Z").getTime())).toBe(false);
+    expect(isOverdue(item(2, 7), after)).toBe(false);
   });
 });

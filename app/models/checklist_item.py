@@ -27,6 +27,12 @@ class ChecklistItem(Base):
     text: Mapped[str] = mapped_column(String(500))
     done: Mapped[bool] = mapped_column(default=False, server_default=false())
     position: Mapped[int]
+    # Its own assignee and due date (R-CHECK-05). The assignee must be on the
+    # board (checked in the routes); it isn't one of the card's assignees.
+    assignee_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    due_at: Mapped[datetime | None]
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
 
     checklist: Mapped["Checklist"] = relationship(back_populates="items")

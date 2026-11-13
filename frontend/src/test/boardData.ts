@@ -21,6 +21,7 @@ export function card(id: number, listId: number, extra: Partial<Card> = {}): Car
     comment_count: 0,
     checklist_done: 0,
     checklist_total: 0,
+    checklist_due_at: null,
     ...extra,
   };
 }

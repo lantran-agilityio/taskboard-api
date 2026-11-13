@@ -44,6 +44,11 @@ export function putItem(
   });
 }
 
+/** An unticked item whose due date has passed. */
+export function isOverdue(item: ChecklistItem, now: number = Date.now()): boolean {
+  return !item.done && item.due_at !== null && new Date(item.due_at).getTime() < now;
+}
+
 export function changeItem(
   checklists: Checklist[],
   itemId: number,
