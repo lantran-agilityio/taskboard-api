@@ -40,7 +40,10 @@ const SHOTS: Checklist = {
   ],
 };
 
-type Handler = (request: { body: string | undefined }) => FakeResponse;
+// May answer later (a Promise), as fakeApi allows.
+type Handler = (request: {
+  body: string | undefined;
+}) => FakeResponse | Promise<FakeResponse>;
 type Routes = Record<string, FakeResponse | Handler>;
 
 function serve(
