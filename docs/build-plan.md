@@ -180,6 +180,29 @@ Each is fixed in its own PR.
 3. **Typing quickly in "Add a card" or "Add a list" loses titles** (R-CARD-01, R-LIST-01). While a card is being saved, Enter is ignored (the button is disabled) and the field is then cleared, so a title typed meanwhile is lost. Seen by typing three titles in a row: only the first was added. Fix: clear the field at once and save the titles one after another.
 4. **"1 cards", "1 comments"** in the hover text of the list count and the card front's comment badge. Fix: singular for one.
 
+## Two people at once (step 30)
+
+Done on 2026-11-13: the owner and an editor signed in to the same board in two Chrome tabs, against the local API, with board changes made from both at the same moment. Each scenario compares both screens with the board as the API returns it (`GET /boards/{id}/snapshot`) once the events have arrived.
+
+| Scenario | What happened | Result |
+| --- | --- | --- |
+| 1. A burst of moves | 16 card moves sent at once, half by each user, to random lists and positions | ✓ all 200; the editor's screen, live throughout, matched the server card for card, counts included |
+| 2. Drag against a move | The editor drags a card to Done while the owner moves the same card to QA; then the editor drags a list while the owner moves another | ✓ both screens matched the server; no error shown |
+| 3. A card open while someone else changes it | The owner has a card open; the editor renames it, marks it done, comments, adds a checklist, archives it | ✓ every change showed in the open dialog at once, then the archived banner and read-only controls |
+| 4. …and deletes it | The editor deletes the archived card | ◐ the owner's dialog still shows it as archived (issue 5) |
+| 5. Closing and reopening | The owner closes the board, then reopens it | ✓ the editor's edit controls went and came back, live |
+| 6. Removing a member | The owner removes the editor | ✓ the editor's page said at once that the board is no longer available |
+| 7. Changing a role | The owner makes the editor a viewer | ◐ the viewer's edit controls stay until an edit is refused (issue 6) |
+
+Drags were made with real `DragEvent`s in the page (see step 29), and the owner's side with the API from the page, so both sides' requests went out within milliseconds of each other.
+
+### Issues found
+
+Each is fixed in its own PR.
+
+5. **A card deleted by someone else stays open as archived.** An open archived card is read from the API, not the board, so the `card.deleted` event doesn't reach it; Restore and Delete then fail with 404. Fix: the dialog says "Card not found" when its card is deleted.
+6. **A role change doesn't reach the person whose role changed.** `member.updated` updates the members list but not the board's `role` for the person it's about, so a new viewer keeps the edit controls until an edit gets a 403. Fix: apply the new role to the board when the event is about you.
+
 ## After the build order
 
 Added on 2026-11-13, once step 28 was merged. Each is its own branch and PR.
@@ -192,7 +215,7 @@ Added on 2026-11-13, once step 28 was merged. Each is its own branch and PR.
 ## Risks and open questions
 
 - **Loading a board today takes one request per list.** That's why step 20's snapshot comes before step 24. Without it, a board with 15 lists makes 16 requests.
-- **Drag and realtime races.** Two people dragging at once both succeed, because the board lock serialises them. The second person's screen must then take the server's order from the event. Step 25 needs a test with two browser sessions.
+- **Drag and realtime races.** Two people dragging at once both succeed, because the board lock serialises them. The second person's screen must then take the server's order from the event. Step 25 needs a test with two browser sessions. Done in step 30 ("Two people at once" below): both screens end in the server's order.
 - **Token storage.** A token in `localStorage` can be read by any injected script. Keep it in memory by default, and treat "remember me" as a choice the user makes knowingly. Revisit if the API gets cookie sessions.
 - **The repo stops being backend only.** Done in step 22: CLAUDE.md, CI and the README have frontend sections.
 - **The prototype drifts from the plan.** The prototype updates listed in D3, D5, D6 and D9 should land before step 23, so the UI is built from a picture that matches the API.
