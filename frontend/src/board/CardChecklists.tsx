@@ -6,6 +6,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { DotsIcon } from "../components/icons";
 import { InlineEdit } from "../components/InlineEdit";
 import { Popover } from "../components/Popover";
+import { useQueue } from "../components/queue";
 import type { Attempt } from "./CardDialog";
 import {
   applyChecklistEvent,
@@ -394,13 +395,15 @@ function AddItemForm({
   onDone: () => void;
 }) {
   const [text, setText] = useState("");
+  // Items typed in a row are saved in that order.
+  const queue = useQueue();
 
   function submit(event: FormEvent) {
     event.preventDefault();
     const value = text.trim();
     if (!value) return;
     setText("");
-    void onAdd(value);
+    queue(() => onAdd(value));
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {

@@ -8,10 +8,12 @@ export interface FakeResponse {
   body?: unknown;
 }
 
+// A handler may answer later (a Promise), to test what happens while a
+// request is still in flight.
 type Handler = (request: {
   body: string | undefined;
   headers: Headers;
-}) => FakeResponse;
+}) => FakeResponse | Promise<FakeResponse>;
 
 export function fakeApi(routes: Record<string, FakeResponse | Handler>) {
   const calls: { key: string; body: string | undefined; headers: Headers }[] = [];
@@ -24,7 +26,7 @@ export function fakeApi(routes: Record<string, FakeResponse | Handler>) {
     const route = routes[key];
     if (!route) throw new Error(`fakeApi: no answer for ${key}`);
     const { status, body: responseBody } =
-      typeof route === "function" ? route({ body, headers }) : route;
+      typeof route === "function" ? await route({ body, headers }) : route;
     return new Response(status === 204 ? null : JSON.stringify(responseBody ?? null), {
       status,
       headers: { "Content-Type": "application/json" },

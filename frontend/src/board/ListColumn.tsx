@@ -2,6 +2,7 @@ import { useRef, useState, type DragEvent, type FormEvent } from "react";
 
 import { DotsIcon } from "../components/icons";
 import { InlineEdit } from "../components/InlineEdit";
+import { useQueue } from "../components/queue";
 import { CardFront, type CardActions } from "./CardFront";
 import { dropIndex, type Span } from "./dnd";
 import type { Label, ListWithCards, Member } from "./model";
@@ -176,19 +177,22 @@ function AddCardForm({
   onClose: () => void;
 }) {
   const [title, setTitle] = useState("");
-  const [busy, setBusy] = useState(false);
+  const queue = useQueue();
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
+  function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = title.trim();
     if (!trimmed) {
       onClose();
       return;
     }
-    setBusy(true);
-    const added = await onAdd(trimmed);
-    setBusy(false);
-    if (added) setTitle("");
+    // Emptied at once, so the next title can be typed while this one saves.
+    setTitle("");
+    queue(async () => {
+      const added = await onAdd(trimmed);
+      // Refused: give the title back to fix, unless another is being typed.
+      if (!added) setTitle((current) => current || trimmed);
+    });
   }
 
   return (
@@ -207,7 +211,7 @@ function AddCardForm({
         }}
       />
       <div className="row">
-        <button type="submit" className="btn primary sm" disabled={busy}>
+        <button type="submit" className="btn primary sm">
           Add card
         </button>
         <button
@@ -236,7 +240,7 @@ export function AddListColumn({
 }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
-  const [busy, setBusy] = useState(false);
+  const queue = useQueue();
 
   if (!open) {
     return (
@@ -248,14 +252,16 @@ export function AddListColumn({
     );
   }
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
+  function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return;
-    setBusy(true);
-    const added = await onAdd(trimmed);
-    setBusy(false);
-    if (added) setName("");
+    // As for cards: empty at once, save in order, give a refused name back.
+    setName("");
+    queue(async () => {
+      const added = await onAdd(trimmed);
+      if (!added) setName((current) => current || trimmed);
+    });
   }
 
   return (
@@ -275,7 +281,7 @@ export function AddListColumn({
           }}
         />
         <div className="row">
-          <button type="submit" className="btn primary sm" disabled={busy}>
+          <button type="submit" className="btn primary sm">
             Add list
           </button>
           <button

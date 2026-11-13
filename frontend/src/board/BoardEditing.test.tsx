@@ -30,8 +30,18 @@ function lists(): ListWithCards[] {
 
 type Routes = Record<
   string,
-  FakeResponse | ((request: { body: string | undefined }) => FakeResponse)
+  | FakeResponse
+  | ((request: { body: string | undefined }) => FakeResponse | Promise<FakeResponse>)
 >;
+
+/** A promise the test resolves when it chooses: holds a request in flight. */
+function gate() {
+  let open = () => {};
+  const opened = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  return { open, opened };
+}
 
 function serve(routes: Routes = {}, board: Partial<Board> = {}, start = lists()) {
   return fakeApi({
@@ -197,6 +207,80 @@ describe("adding", () => {
       screen.queryByRole("textbox", { name: "Card title" }),
     ).not.toBeInTheDocument();
     expect(bodiesOf(calls, "POST /lists/3/cards")).toHaveLength(2);
+  });
+});
+
+describe("typing fast", () => {
+  it("keeps card titles typed while the last one saves, and saves them in order", async () => {
+    let next = 300;
+    const first = gate();
+    const { calls } = serve({
+      "POST /lists/3/cards": async ({ body }) => {
+        const title = JSON.parse(body ?? "{}").title;
+        if (title === "One") await first.opened;
+        return { status: 201, body: card(next++, 3, { title }) };
+      },
+    });
+    const user = await openBoard();
+
+    await user.click(lane("Done").getByRole("button", { name: "+ Add a card" }));
+    const field = screen.getByRole("textbox", { name: "Card title" });
+    await user.type(field, "One{Enter}");
+    // "One" is still saving: the field is already empty for the next title.
+    expect(field).toHaveValue("");
+    await user.type(field, "Two{Enter}Three{Enter}");
+    expect(bodiesOf(calls, "POST /lists/3/cards")).toEqual([{ title: "One" }]);
+
+    await act(async () => first.open());
+
+    await waitFor(() => expect(titles("Done")).toEqual(["One", "Two", "Three"]));
+    expect(bodiesOf(calls, "POST /lists/3/cards")).toEqual([
+      { title: "One" },
+      { title: "Two" },
+      { title: "Three" },
+    ]);
+    expect(field).toHaveValue("");
+  });
+
+  it("keeps list names typed while the last one saves", async () => {
+    let next = 4;
+    const first = gate();
+    serve({
+      "POST /boards/1/lists": async ({ body }) => {
+        const name = JSON.parse(body ?? "{}").name;
+        if (name === "Later") await first.opened;
+        return { status: 201, body: { ...list(next++, name), cards: undefined } };
+      },
+    });
+    const user = await openBoard();
+
+    await user.click(screen.getByRole("button", { name: "+ Add another list" }));
+    await user.type(
+      screen.getByRole("textbox", { name: "List name" }),
+      "Later{Enter}Someday{Enter}",
+    );
+    await act(async () => first.open());
+
+    await waitFor(() =>
+      expect(laneNames()).toEqual(["To do", "Doing", "Done", "Later", "Someday"]),
+    );
+  });
+
+  it("gives a refused title back, if the field is still empty", async () => {
+    serve({
+      "POST /lists/3/cards": {
+        status: 422,
+        body: { detail: [{ loc: ["body", "title"], msg: "Too long" }] },
+      },
+    });
+    const user = await openBoard();
+
+    await user.click(lane("Done").getByRole("button", { name: "+ Add a card" }));
+    await user.type(screen.getByRole("textbox", { name: "Card title" }), "Oops{Enter}");
+
+    await waitFor(() =>
+      expect(screen.getByRole("textbox", { name: "Card title" })).toHaveValue("Oops"),
+    );
   });
 });
 
