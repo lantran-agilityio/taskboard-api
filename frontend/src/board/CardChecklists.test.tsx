@@ -40,7 +40,10 @@ const SHOTS: Checklist = {
   ],
 };
 
-type Handler = (request: { body: string | undefined }) => FakeResponse;
+// May answer later (a Promise), as fakeApi allows.
+type Handler = (request: {
+  body: string | undefined;
+}) => FakeResponse | Promise<FakeResponse>;
 type Routes = Record<string, FakeResponse | Handler>;
 
 function serve(
@@ -396,6 +399,40 @@ describe("changing checklists", () => {
 });
 
 describe("live updates", () => {
+  it("keeps an event that arrives while the checklists are being re-read", async () => {
+    let reads = 0;
+    let answerLate: (response: FakeResponse) => void = () => {};
+    serve({
+      "GET /cards/100/checklists": () => {
+        reads += 1;
+        if (reads === 1) return { status: 200, body: [SHOTS] };
+        // The re-read after a reconnect answers only when the test says so.
+        return new Promise<FakeResponse>((resolve) => (answerLate = resolve));
+      },
+    });
+    await open();
+    const shots_ = await shots();
+
+    act(() => FakeWebSocket.latest().receive({ type: "ready" })); // a reconnect
+    await waitFor(() => expect(reads).toBe(2));
+    act(() =>
+      FakeWebSocket.latest().receive({
+        type: "checklist_item.updated",
+        board_id: 1,
+        actor_id: 2,
+        data: {
+          card_id: 100,
+          item: item(72, "Team photo", true, 2),
+          item_ids: [70, 71, 72],
+        },
+      }),
+    );
+    // The re-read answers with what it read before that event.
+    await act(async () => answerLate({ status: 200, body: [SHOTS] }));
+
+    expect(shots_.getByRole("checkbox", { name: "Team photo" })).toBeChecked();
+  });
+
   it("applies others' checklist changes as they happen", async () => {
     serve();
     await open();
