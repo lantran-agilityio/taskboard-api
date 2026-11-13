@@ -255,7 +255,8 @@ def test_starring_is_not_logged(client: TestClient) -> None:
     client.put(f"/boards/{board['id']}/star")
     client.delete(f"/boards/{board['id']}/star")
 
-    assert client.get(f"/boards/{board['id']}/activity").json()["items"] == []
+    entries = client.get(f"/boards/{board['id']}/activity").json()["items"]
+    assert [entry["type"] for entry in entries] == ["board.created"]
 
 
 def test_star_missing_board_returns_404(client: TestClient) -> None:

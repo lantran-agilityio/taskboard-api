@@ -285,6 +285,8 @@ export function describe(
         ? "left the board"
         : `removed ${person(context, d.user_id)} from the board`;
 
+    case "board.created":
+      return "created the board";
     case "board.updated": {
       const words = previous ? boardChanges(previous, d.board) : [];
       return words.length > 0 ? words.join(", ") : "changed the board";

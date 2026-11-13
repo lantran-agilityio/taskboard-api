@@ -78,9 +78,13 @@ def create_board(
 ) -> BoardRead:
     board = Board(name=payload.name, description=payload.description, owner=user)
     # One unnamed label per colour, in the enum's order, so cards can be tagged at once.
-    # No events: nobody can be watching a board that doesn't exist yet.
+    # No label events: they'd only crowd the new board's log.
     board.labels = [Label(name="", color=color) for color in LabelColor]
     db.add(board)
+    db.flush()  # gives the board its id and created_at for the event
+    # Logged, so the board's history starts with its creation (R-BOARD-02). Nobody
+    # can be watching yet, so the NOTIFY reaches no one.
+    publish_board(db, EventType.BOARD_CREATED, board, user.id)
     db.commit()
     db.refresh(board)
     return board_read(board, starred=False, role=BoardRole.OWNER, counts=(0, 0))
