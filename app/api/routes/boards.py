@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import or_, select
@@ -13,7 +14,7 @@ from app.models.board_list import BoardList
 from app.models.board_member import BoardMember, BoardRole
 from app.models.card import Card
 from app.models.label import Label, LabelColor
-from app.realtime.events import EventType, publish
+from app.realtime.events import EventType, changes_from, publish
 from app.schemas.board import (
     BoardCreate,
     BoardRead,
@@ -63,13 +64,24 @@ def read_board(db: Session, board: Board, user_id: int) -> BoardRead:
 PER_CALLER = {"starred", "role", "list_count", "card_count"}
 
 
-def publish_board(
-    db: Session, event_type: EventType, board: Board, user_id: int
-) -> None:
-    data = board_read(
+def board_data(board: Board) -> dict[str, Any]:
+    """The board as board events carry it: the same for everyone."""
+    return board_read(
         board, starred=False, role=BoardRole.OWNER, counts=(0, 0)
     ).model_dump(mode="json", exclude=PER_CALLER)
-    publish(db, board.id, event_type, {"board": data}, actor_id=user_id)
+
+
+def publish_board(
+    db: Session,
+    event_type: EventType,
+    board: Board,
+    user_id: int,
+    before: dict[str, Any] | None = None,
+) -> None:
+    data: dict[str, Any] = {"board": board_data(board)}
+    if before is not None:
+        data["previous"] = changes_from(before, data["board"])
+    publish(db, board.id, event_type, data, actor_id=user_id)
 
 
 @router.post("", response_model=BoardRead, status_code=status.HTTP_201_CREATED)
@@ -170,13 +182,14 @@ def update_board(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Requires the {BoardRole.OWNER} role",
         )
+    before = board_data(board)
     if payload.name is not None:
         board.name = payload.name
     # Checked by name, because description=None means "clear it".
     if "description" in payload.model_fields_set:
         board.description = payload.description
     db.flush()
-    publish_board(db, EventType.BOARD_UPDATED, board, user.id)
+    publish_board(db, EventType.BOARD_UPDATED, board, user.id, before)
     db.commit()
     db.refresh(board)
     return read_board(db, board, user.id)

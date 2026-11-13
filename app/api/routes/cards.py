@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, status
 from pydantic import AwareDatetime
@@ -22,7 +22,7 @@ from app.models.board_list import BoardList
 from app.models.card import Card
 from app.models.label import Label
 from app.models.user import User
-from app.realtime.events import EventType, card_order, publish
+from app.realtime.events import EventType, card_order, changes_from, publish
 from app.schemas.card import CardCreate, CardRead, CardUpdate
 from app.services.card_details import resolve_assignees, resolve_labels
 from app.services.ordering import insert_item, move_item, remove_item, transfer_item
@@ -136,23 +136,25 @@ def search_cards(
     return db.scalars(query).all()
 
 
+def card_data(card: Card) -> dict[str, Any]:
+    return CardRead.model_validate(card).model_dump(mode="json")
+
+
 def publish_card(
     db: Session,
     event_type: EventType,
     card: Card,
     lists: list[BoardList],
     actor_id: int,
+    before: dict[str, Any] | None = None,
 ) -> None:
-    publish(
-        db,
-        card.board_list.board_id,
-        event_type,
-        {
-            "card": CardRead.model_validate(card).model_dump(mode="json"),
-            "lists": [card_order(board_list) for board_list in lists],
-        },
-        actor_id=actor_id,
-    )
+    data: dict[str, Any] = {
+        "card": card_data(card),
+        "lists": [card_order(board_list) for board_list in lists],
+    }
+    if before is not None:
+        data["previous"] = changes_from(before, data["card"])
+    publish(db, card.board_list.board_id, event_type, data, actor_id=actor_id)
 
 
 def find_target_list(card: Card, list_id: int | None, db: Session) -> BoardList:
@@ -184,6 +186,7 @@ def update_card(
     labels, assignees = card_details(
         db, card.board_list.board, payload.label_ids, payload.assignee_ids
     )
+    before = card_data(card)
     # Move first: if the list or position is invalid, nothing has changed yet.
     current = card.board_list
     target = find_target_list(card, payload.list_id, db)
@@ -217,7 +220,7 @@ def update_card(
     db.flush()
     # A cross-list move changes the order of both lists.
     affected = [current] if target is current else [current, target]
-    publish_card(db, EventType.CARD_UPDATED, card, affected, user.id)
+    publish_card(db, EventType.CARD_UPDATED, card, affected, user.id, before)
     db.commit()
     db.refresh(card)
     return card

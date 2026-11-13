@@ -71,6 +71,19 @@ group("describe", () => {
     );
   });
 
+  it("uses the old values the event carries, over an older or missing entry", () => {
+    const moved = entry("card.updated", {
+      card: { ...BASE, list_id: 2 },
+      previous: { list_id: 1 },
+    });
+    // No earlier entry loaded at all.
+    expect(describe(moved, null, CONTEXT)).toBe("moved this card from To do to Doing");
+    // An earlier entry that's out of date (a change in between isn't loaded).
+    expect(describe(moved, { ...BASE, title: "Old" }, CONTEXT)).toBe(
+      "moved this card from To do to Doing",
+    );
+  });
+
   it("falls back when there's nothing to compare with", () => {
     expect(describe(entry("card.updated", { card: BASE }), null, CONTEXT)).toBe(
       "updated this card",
@@ -252,6 +265,12 @@ group("the board's log", () => {
       "changed the board's description",
     ],
     ["board.created", { board: boardInfo() }, null, "created the board"],
+    [
+      "board.updated",
+      { board: { name: "Big launch" }, previous: { name: "Launch" } },
+      null,
+      "renamed the board from “Launch” to “Big launch”",
+    ],
     ["board.closed", { board: boardInfo() }, null, "closed the board"],
     ["board.reopened", { board: boardInfo() }, null, "reopened the board"],
   ])("%s reads %j", (type, data, previous, words) => {
