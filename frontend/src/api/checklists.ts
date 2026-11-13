@@ -18,6 +18,8 @@ export interface ItemChange {
   done?: boolean;
   assignee_id?: number | null;
   due_at?: string | null;
+  /** 0-based, within its checklist. */
+  position?: number;
 }
 
 /** A card's checklist with its items, in order (as the API reads it). */
@@ -54,6 +56,19 @@ export function renameChecklist(
   return apiFetch<Checklist>(`/checklists/${checklistId}`, {
     method: "PATCH",
     json: { title },
+    token,
+  });
+}
+
+/** Moves a checklist to a 0-based position among the card's checklists. */
+export function moveChecklist(
+  token: string,
+  checklistId: number,
+  position: number,
+): Promise<Checklist> {
+  return apiFetch<Checklist>(`/checklists/${checklistId}`, {
+    method: "PATCH",
+    json: { position },
     token,
   });
 }

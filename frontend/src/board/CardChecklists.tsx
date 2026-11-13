@@ -3,7 +3,7 @@ import { useEffect, useId, useState, type FormEvent, type KeyboardEvent } from "
 import * as api from "../api/checklists";
 import type { Checklist, ChecklistItem, ItemChange } from "../api/checklists";
 import { ConfirmDialog } from "../components/ConfirmDialog";
-import { DotsIcon } from "../components/icons";
+import { DotsIcon, GripIcon } from "../components/icons";
 import { plural } from "../format";
 import { InlineEdit } from "../components/InlineEdit";
 import { Popover } from "../components/Popover";
@@ -22,6 +22,8 @@ import {
   removeItem,
 } from "./checklists";
 import type { BoardEvent, Member } from "./model";
+import { fullIndex, moveTo } from "./reorder";
+import { useDragSort, useReorder } from "./useReorder";
 
 export interface ChecklistsHandle {
   /** null while loading. */
@@ -37,6 +39,9 @@ export interface ChecklistsHandle {
   toggle: (item: ChecklistItem) => void;
   /** Text, assignee or due date; shown at once, then saved. */
   editItem: (item: ChecklistItem, change: ItemChange) => void;
+  /** Moves to a 0-based position (R-CHECK-06): shown at once, then saved. */
+  moveChecklist: (checklist: Checklist, index: number) => void;
+  moveItem: (item: ChecklistItem, index: number) => void;
   removeItem: (item: ChecklistItem) => void;
 }
 
@@ -160,6 +165,32 @@ export function useChecklists(
         else reread();
       });
     },
+    moveChecklist(checklist, index) {
+      if (checklist.position === index) return;
+      apply((current) => moveTo(current, checklist.id, index));
+      void attempt("move the checklist", () =>
+        api.moveChecklist(token, checklist.id, index),
+      ).then((saved) => {
+        if (saved) apply((current) => putChecklist(current, saved));
+        else reread();
+      });
+    },
+    moveItem(item, index) {
+      if (item.position === index) return;
+      apply((current) =>
+        current.map((checklist) =>
+          checklist.id === item.checklist_id
+            ? { ...checklist, items: moveTo(checklist.items, item.id, index) }
+            : checklist,
+        ),
+      );
+      void attempt("move the item", () =>
+        api.updateItem(token, item.id, { position: index }),
+      ).then((saved) => {
+        if (saved) apply((current) => putItem(current, saved));
+        else reread();
+      });
+    },
     removeItem(item) {
       apply((current) => removeItem(current, item.id));
       void attempt("delete the item", () => api.deleteItem(token, item.id)).then(
@@ -205,22 +236,47 @@ export function Checklists({
   members: Member[];
 }) {
   const [confirm, setConfirm] = useState<Checklist | null>(null);
+  const lists = handle.checklists ?? [];
+  const byId = (id: number) => lists.find((checklist) => checklist.id === id)!;
+  const keys = useReorder({
+    ids: lists.map((checklist) => checklist.id),
+    name: (id) => `the checklist “${byId(id).title}”`,
+    onDrop: (id, index) => handle.moveChecklist(byId(id), index),
+  });
+  const drag = useDragSort((id, index) => handle.moveChecklist(byId(id), index));
   if (handle.failed && !handle.checklists) {
     return <p className="muted">Couldn't load the checklists.</p>;
   }
   if (!handle.checklists) return null;
+  const others = keys.order.filter((id) => id !== drag.dragId);
   return (
     <>
-      {handle.checklists.map((checklist) => (
-        <ChecklistBlock
-          key={checklist.id}
-          checklist={checklist}
-          handle={handle}
-          editable={editable}
-          members={members}
-          onDelete={() => setConfirm(checklist)}
-        />
-      ))}
+      <div className="checklists" {...(editable ? drag.containerProps : {})}>
+        {keys.order.map((id) => (
+          <ChecklistBlock
+            key={id}
+            checklist={byId(id)}
+            handle={handle}
+            editable={editable}
+            members={members}
+            onDelete={() => setConfirm(byId(id))}
+            sort={
+              editable
+                ? {
+                    drag: drag.itemProps(id),
+                    grip: keys.handleProps(id),
+                    held: keys.held?.id === id,
+                    dragging: drag.dragId === id,
+                    dropBefore: drag.dropAt !== null && others[drag.dropAt] === id,
+                  }
+                : undefined
+            }
+          />
+        ))}
+      </div>
+      <p className="sr-only" aria-live="polite">
+        {keys.announcement}
+      </p>
       {confirm && (
         <ConfirmDialog
           title={`Delete the checklist “${confirm.title}”?`}
@@ -239,18 +295,41 @@ export function Checklists({
   );
 }
 
+/** How one checklist or item is moved: drag props, its grip's keys, and its state. */
+interface Sortable {
+  drag: ReturnType<ReturnType<typeof useDragSort>["itemProps"]>;
+  grip: ReturnType<ReturnType<typeof useReorder>["handleProps"]>;
+  held: boolean;
+  dragging: boolean;
+  dropBefore: boolean;
+}
+
+function sortClass(base: string, sort: Sortable | undefined): string {
+  return [
+    base,
+    sort?.held && "held",
+    sort?.dragging && "dragging",
+    sort?.dropBefore && "drop-before",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
 function ChecklistBlock({
   checklist,
   handle,
   editable,
   members,
   onDelete,
+  sort,
 }: {
   checklist: Checklist;
   handle: ChecklistsHandle;
   editable: boolean;
   members: Member[];
   onDelete: () => void;
+  /** Given to those who can edit: how this checklist is moved (R-CHECK-06). */
+  sort?: Sortable;
 }) {
   const [hidden, setHidden] = useState(() => readHidden(checklist.id));
   const [options, setOptions] = useState<{
@@ -260,7 +339,23 @@ function ChecklistBlock({
   const { done, total, percent } = progress(checklist);
   // The toggle only shows once something is ticked (R-CHECK-03).
   const hiding = hidden && done > 0;
-  const shown = hiding ? checklist.items.filter((item) => !item.done) : checklist.items;
+  const itemById = (id: number) => checklist.items.find((item) => item.id === id)!;
+  const allIds = checklist.items.map((item) => item.id);
+  // Only the items on screen take part, so positions match what people see.
+  const visibleIds = checklist.items
+    .filter((item) => !(hiding && item.done))
+    .map((item) => item.id);
+  function drop(id: number, index: number) {
+    handle.moveItem(itemById(id), fullIndex(allIds, visibleIds, id, index));
+  }
+  const keys = useReorder({
+    ids: visibleIds,
+    name: (id) => `the item “${itemById(id).text}”`,
+    onDrop: drop,
+  });
+  const drag = useDragSort(drop);
+  const shown = keys.order.map(itemById);
+  const others = shown.filter((item) => item.id !== drag.dragId);
 
   function setHiddenTo(value: boolean) {
     setHidden(value);
@@ -268,8 +363,27 @@ function ChecklistBlock({
   }
 
   return (
-    <section className="detail checklist" aria-label={checklist.title}>
-      <div className="blk-head">
+    <section
+      className={sortClass("detail checklist", sort)}
+      aria-label={checklist.title}
+      data-sort-id={sort?.drag["data-sort-id"]}
+    >
+      <div
+        className="blk-head"
+        draggable={sort ? true : undefined}
+        onDragStart={sort?.drag.onDragStart}
+        onDragEnd={sort?.drag.onDragEnd}
+      >
+        {sort && (
+          <button
+            type="button"
+            className="ghost sm grip"
+            aria-label={`Move the checklist ${checklist.title}`}
+            {...sort.grip}
+          >
+            <GripIcon />
+          </button>
+        )}
         <h3>
           <InlineEdit
             value={checklist.title}
@@ -308,11 +422,30 @@ function ChecklistBlock({
         </div>
       </div>
       {shown.length > 0 && (
-        <ul className="items">
+        <ul
+          className={
+            drag.dropAt !== null && drag.dropAt >= others.length
+              ? "items drop-end"
+              : "items"
+          }
+          {...(editable ? drag.containerProps : {})}
+        >
           {shown.map((item) => (
             <ItemRow
               key={item.id}
               item={item}
+              sort={
+                editable
+                  ? {
+                      drag: drag.itemProps(item.id),
+                      grip: keys.handleProps(item.id),
+                      held: keys.held?.id === item.id,
+                      dragging: drag.dragId === item.id,
+                      dropBefore:
+                        drag.dropAt !== null && others[drag.dropAt]?.id === item.id,
+                    }
+                  : undefined
+              }
               assignee={members.find((member) => member.user_id === item.assignee_id)}
               editable={editable}
               onToggle={() => handle.toggle(item)}
@@ -322,6 +455,9 @@ function ChecklistBlock({
         </ul>
       )}
       {hiding && shown.length === 0 && <p className="hint">Every item is ticked.</p>}
+      <p className="sr-only" aria-live="polite">
+        {keys.announcement}
+      </p>
       {editable &&
         (handle.addingTo === checklist.id ? (
           <AddItemForm
@@ -361,12 +497,14 @@ function ChecklistBlock({
 
 function ItemRow({
   item,
+  sort,
   assignee,
   editable,
   onToggle,
   onOptions,
 }: {
   item: ChecklistItem;
+  sort?: Sortable;
   assignee: Member | undefined;
   editable: boolean;
   onToggle: () => void;
@@ -374,7 +512,17 @@ function ItemRow({
 }) {
   const id = useId();
   return (
-    <li className={item.done ? "item done" : "item"}>
+    <li className={sortClass(item.done ? "item done" : "item", sort)} {...sort?.drag}>
+      {sort && (
+        <button
+          type="button"
+          className="ghost sm grip"
+          aria-label={`Move ${item.text}`}
+          {...sort.grip}
+        >
+          <GripIcon />
+        </button>
+      )}
       <input
         type="checkbox"
         id={id}
