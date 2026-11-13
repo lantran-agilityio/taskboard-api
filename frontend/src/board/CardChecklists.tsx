@@ -1,4 +1,11 @@
-import { useEffect, useId, useState, type FormEvent, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 
 import * as api from "../api/checklists";
 import type { Checklist, ChecklistItem, ItemChange } from "../api/checklists";
@@ -68,18 +75,27 @@ export function useChecklists(
   // Bumped to read the checklists again.
   const [reads, setReads] = useState(0);
   const reread = () => setReads((count) => count + 1);
+  // Events that arrive while a read is in flight. The read's answer may be
+  // older than them, so they're applied again on top of it (events carry the
+  // new state, so applying one twice changes nothing), as useBoard does.
+  const during = useRef<BoardEvent[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    during.current = [];
     api
       .listChecklists(token, cardId)
       .then((found) => {
         if (cancelled) return;
-        setChecklists(found);
+        const missed = during.current ?? [];
+        during.current = null;
+        setChecklists(missed.reduce(applyChecklistEvent, found));
         setFailed(false);
       })
       .catch(() => {
-        if (!cancelled) setFailed(true);
+        if (cancelled) return;
+        during.current = null;
+        setFailed(true);
       });
     return () => {
       cancelled = true;
@@ -94,6 +110,7 @@ export function useChecklists(
           return;
         }
         if (!isChecklistEvent(event) || event.data?.card_id !== cardId) return;
+        during.current?.push(event);
         const missing =
           event.type.startsWith("checklist_item.") &&
           !(checklists ?? []).some((list) => list.id === event.data.item?.checklist_id);
