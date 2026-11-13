@@ -157,7 +157,7 @@ describe("the board page", () => {
     );
 
     const venue = screen.getByRole("article", { name: "Book venue" });
-    expect(await within(venue).findByTitle("1 comments")).toBeInTheDocument();
+    expect(await within(venue).findByTitle("1 comment")).toBeInTheDocument();
     expect(calls.map((call) => call.key)).toContain("GET /cards/101");
   });
 

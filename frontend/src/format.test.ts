@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { timeAgo } from "./format";
+import { plural, timeAgo } from "./format";
 
 const NOW = new Date("2026-11-11T12:00:00Z");
 
@@ -14,5 +14,15 @@ describe("timeAgo", () => {
     ["2026-10-11T12:00:00Z", "last month"],
   ])("%s is %s", (iso, expected) => {
     expect(timeAgo(iso, NOW)).toBe(expected);
+  });
+});
+
+describe("plural", () => {
+  it.each([
+    [0, "0 cards"],
+    [1, "1 card"],
+    [2, "2 cards"],
+  ])("%i reads %s", (count, words) => {
+    expect(plural(count, "card")).toBe(words);
   });
 });

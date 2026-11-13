@@ -19,3 +19,8 @@ export function timeAgo(iso: string, now: Date = new Date()): string {
   }
   return "just now";
 }
+
+/** "1 card", "2 cards": a count with its word, singular for one. */
+export function plural(count: number, word: string): string {
+  return `${count} ${word}${count === 1 ? "" : "s"}`;
+}

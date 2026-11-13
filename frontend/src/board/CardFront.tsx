@@ -8,6 +8,7 @@ import {
   LinesIcon,
   TickboxIcon,
 } from "../components/icons";
+import { plural } from "../format";
 import { dueState, type Card, type DueState, type Label, type Member } from "./model";
 
 const DUE_WORD: Record<DueState, string> = {
@@ -167,7 +168,7 @@ export function CardFront({
           </span>
         )}
         {card.comment_count > 0 && (
-          <span className="badge" title={`${card.comment_count} comments`}>
+          <span className="badge" title={plural(card.comment_count, "comment")}>
             <BubbleIcon />
             {card.comment_count}
           </span>

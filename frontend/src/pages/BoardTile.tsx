@@ -1,9 +1,6 @@
 import type { Board } from "../api/boards";
 import { StarIcon } from "../components/icons";
-
-function plural(count: number, word: string): string {
-  return `${count} ${word}${count === 1 ? "" : "s"}`;
-}
+import { plural } from "../format";
 
 export function BoardTile({
   board,
