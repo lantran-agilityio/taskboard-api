@@ -78,3 +78,13 @@ export const DotsIcon = () => (
     <circle cx="19" cy="12" r="1.2" />
   </Icon>
 );
+export const GripIcon = () => (
+  <Icon size={14}>
+    <circle cx="9" cy="6" r="1.2" />
+    <circle cx="15" cy="6" r="1.2" />
+    <circle cx="9" cy="12" r="1.2" />
+    <circle cx="15" cy="12" r="1.2" />
+    <circle cx="9" cy="18" r="1.2" />
+    <circle cx="15" cy="18" r="1.2" />
+  </Icon>
+);

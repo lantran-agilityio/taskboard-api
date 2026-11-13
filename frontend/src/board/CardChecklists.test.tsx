@@ -1,6 +1,13 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
 import type { Board } from "../api/boards";
@@ -96,6 +103,16 @@ function bodiesOf(calls: { key: string; body: string | undefined }[], key: strin
     .map((call) => JSON.parse(call.body ?? "null"));
 }
 
+function texts(region: ReturnType<typeof within>): string[] {
+  return region
+    .getAllByRole("listitem")
+    .map((row: HTMLElement) => row.querySelector(".t")!.textContent ?? "");
+}
+
+// jsdom has no DragEvent; a MouseEvent keeps clientY (as in BoardEditing.test).
+class DragEventWithPointer extends MouseEvent {}
+const dataTransfer = { setData: () => {}, effectAllowed: "", dropEffect: "" };
+
 /** A PATCH /checklist-items/<id> that answers with the item as changed. */
 function patchItem(base: ChecklistItem): Handler {
   return ({ body }) => ({
@@ -105,6 +122,7 @@ function patchItem(base: ChecklistItem): Handler {
 }
 
 beforeEach(() => {
+  vi.stubGlobal("DragEvent", DragEventWithPointer);
   window.localStorage.clear();
   window.localStorage.setItem(TOKEN_KEY, "t1");
   installFakeWebSocket();
@@ -168,6 +186,9 @@ describe("reading checklists", () => {
     expect(
       shots_.queryByRole("button", { name: /Item options/ }),
     ).not.toBeInTheDocument();
+    // Nothing to move with: no grips, nothing draggable (R-CHECK-06).
+    expect(shots_.queryByRole("button", { name: /^Move/ })).not.toBeInTheDocument();
+    expect(shots_.getByText("Close-up").closest("li")).not.toHaveAttribute("draggable");
     expect(
       dialog().queryByRole("button", { name: "Add a checklist" }),
     ).not.toBeInTheDocument();
@@ -364,6 +385,110 @@ describe("changing checklists", () => {
     await user.click(pop.getByRole("button", { name: "Save" }));
 
     expect(bodiesOf(calls, "PATCH /checklist-items/71")).toEqual([]);
+  });
+
+  it("moves an item with the keyboard, saving only on the drop", async () => {
+    const { calls } = serve({
+      "PATCH /checklist-items/72": patchItem(item(72, "Team photo", false, 2)),
+    });
+    const user = await open();
+    const shots_ = await shots();
+
+    shots_.getByRole("button", { name: "Move Team photo" }).focus();
+    await user.keyboard(" ");
+    expect(
+      screen.getByText(/Picked up the item “Team photo”, position 3 of 3/),
+    ).toBeInTheDocument();
+    await user.keyboard("{ArrowUp}{ArrowUp}");
+    expect(texts(shots_)).toEqual(["Team photo", "Window display", "Close-up"]);
+    expect(
+      screen.getByText("the item “Team photo”, position 1 of 3."),
+    ).toBeInTheDocument();
+    expect(bodiesOf(calls, "PATCH /checklist-items/72")).toEqual([]);
+    // Focus follows the item as it moves.
+    expect(shots_.getByRole("button", { name: "Move Team photo" })).toHaveFocus();
+
+    await user.keyboard(" ");
+    expect(bodiesOf(calls, "PATCH /checklist-items/72")).toEqual([{ position: 0 }]);
+    expect(
+      screen.getByText("Dropped the item “Team photo” at position 1 of 3."),
+    ).toBeInTheDocument();
+  });
+
+  it("puts an item back on Escape, without closing the card", async () => {
+    const { calls } = serve();
+    const user = await open();
+    const shots_ = await shots();
+
+    shots_.getByRole("button", { name: "Move Window display" }).focus();
+    await user.keyboard(" {ArrowDown}{Escape}");
+
+    expect(texts(shots_)).toEqual(["Window display", "Close-up", "Team photo"]);
+    expect(calls.some((call) => call.key.startsWith("PATCH"))).toBe(false);
+    expect(screen.getByRole("dialog", { name: "Brief" })).toBeInTheDocument();
+    expect(
+      screen.getByText(/Cancelled\. the item “Window display” is back at position 1/),
+    ).toBeInTheDocument();
+  });
+
+  it("drags an item to the top of its checklist", async () => {
+    const { calls } = serve({
+      "PATCH /checklist-items/72": patchItem(item(72, "Team photo", false, 2)),
+    });
+    await open();
+    const shots_ = await shots();
+    const row = shots_.getByText("Team photo").closest("li")!;
+    const items = row.closest("ul")!;
+
+    fireEvent.dragStart(row, { dataTransfer });
+    fireEvent.dragOver(items, { dataTransfer, clientY: -10 });
+    fireEvent.drop(items, { dataTransfer, clientY: -10 });
+
+    expect(texts(shots_)).toEqual(["Team photo", "Window display", "Close-up"]);
+    expect(bodiesOf(calls, "PATCH /checklist-items/72")).toEqual([{ position: 0 }]);
+  });
+
+  it("moves an item among the shown ones while ticked items are hidden", async () => {
+    const { calls } = serve({
+      "PATCH /checklist-items/72": patchItem(item(72, "Team photo", false, 2)),
+    });
+    const user = await open();
+    const shots_ = await shots();
+    await user.click(shots_.getByRole("button", { name: "Hide ticked items" }));
+
+    shots_.getByRole("button", { name: "Move Team photo" }).focus();
+    await user.keyboard(" {ArrowUp} ");
+
+    // In front of Close-up, which is at position 1 behind the hidden item.
+    expect(bodiesOf(calls, "PATCH /checklist-items/72")).toEqual([{ position: 1 }]);
+  });
+
+  it("moves a checklist with the keyboard", async () => {
+    const photos: Checklist = {
+      ...SHOTS,
+      id: 8,
+      title: "Props",
+      position: 1,
+      items: [],
+    };
+    const { calls } = serve(
+      {
+        "PATCH /checklists/8": { status: 200, body: { ...photos, position: 0 } },
+      },
+      {},
+      [SHOTS, photos],
+    );
+    const user = await open();
+    await shots();
+
+    screen.getByRole("button", { name: "Move the checklist Props" }).focus();
+    await user.keyboard(" {ArrowUp} ");
+
+    expect(bodiesOf(calls, "PATCH /checklists/8")).toEqual([{ position: 0 }]);
+    const regions = screen
+      .getAllByRole("region")
+      .map((region) => region.getAttribute("aria-label"));
+    expect(regions.indexOf("Props")).toBeLessThan(regions.indexOf("Shots"));
   });
 
   it("deletes a checklist after a confirmation", async () => {

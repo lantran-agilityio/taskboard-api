@@ -176,7 +176,7 @@ Done on 2026-11-13 against `main` after step 28: the real app (API and Vite dev 
 | R-DATE-03 Start date *(step 32)* | Card → Dates: start and due ticked on or off, kept in order; a range on the card | ✓ (logged, unlike the product) | tests |
 | R-CHECK-01 to R-CHECK-04 | Checklists in the card dialog (step 28) | ✓ | clicked (step 28), tests |
 | R-CHECK-05 Item assignee and due date *(step 32)* | Item options: assignee and due date; shown on the row; the card front adds the next item due | ✓ (set from the item's options, not while adding it) | tests |
-| R-CHECK-06 Reorder checklists and items *(step 32)* | — | not built yet | — |
+| R-CHECK-06 Reorder checklists and items *(step 32)* | Drag items and checklists (by the header); "Move …" grips for the keyboard, announced | ✓ by mouse and keyboard; touch comes with the touch PR | tests |
 | R-COMMENT-01 Comment on a card | Composer at the top; name and relative time; mixed with activity; front count | ✓ | clicked |
 | R-COMMENT-02 Edit my comment | Edit, Save, "Discard changes", "(edited)" | ✓ | tests |
 | R-COMMENT-03 Delete my comment | After a confirmation | ✓ | tests |
