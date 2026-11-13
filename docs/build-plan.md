@@ -109,6 +109,15 @@ Each step names the prototype screen it builds, the API it needs, and the realti
 6. **Step 27: board menu and sharing.** About, activity (all or comments), archived items with restore and delete, labels, close board, and Share (invite by email, roles, leave). *Needs:* steps 17–20 and the member routes.
 7. **Step 28: checklists in the card dialog.** *Needs:* step 21.
 
+## After the build order
+
+Added on 2026-11-13, once step 28 was merged. Each is its own branch and PR.
+
+1. **Step 29: check the frontend against this plan.** Click through every requirement ID in the real app, as the prototype was checked, and record in the Coverage table which are built and where. Fix the plan where the build went another way (for example, step 25 above says echoed events are skipped by `actor_id`; the frontend applies every event instead, because applying one is idempotent).
+2. **Step 30: two people at once.** The drag and realtime race under "Risks" below: two browser sessions on one board, dragging and editing at the same time, both ending with the server's order. Fix what it finds.
+3. **Step 31: second observe session.** Phase 1 again, with a second account (the user logs in): R-MEMBER-05, R-DATE-03, R-CHECK-05 and open questions 1–9 in `requirements.md`. Update the observations and requirements, then say which decisions (D5, D10, D11) and steps change.
+4. **Step 32: beyond the requirements.** Reorder checklist items (the API already takes `position`), item assignees and due dates (R-CHECK-05, only once step 31 confirms it), and touch and keyboard dragging. Each starts as a requirement in `requirements.md`, then gets its build-plan row.
+
 ## Risks and open questions
 
 - **Loading a board today takes one request per list.** That's why step 20's snapshot comes before step 24. Without it, a board with 15 lists makes 16 requests.

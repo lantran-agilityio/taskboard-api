@@ -206,3 +206,7 @@ GitHub Actions runs the same checks on every pull request and every push to `mai
 26. Frontend card dialog: details (26a), then comments and activity (26b)
 27. Frontend board menu (27a: about, activity, archived items, labels, close) and sharing (27b)
 28. Frontend checklists in the card dialog: add, tick, hide ticked items, rename, edit and delete
+29. Check the frontend against the build plan: click through every requirement in the real app, record what's built, fix the plan where it drifted
+30. Two people at once: drag and live updates tested with two browser sessions
+31. Second observe session (needs a second account): the unconfirmed requirements and the open questions in [`docs/requirements.md`](docs/requirements.md#open-questions)
+32. Beyond the requirements: reorder checklist items, item assignees and dates (R-CHECK-05, once confirmed), touch and keyboard dragging; each gets requirements first
