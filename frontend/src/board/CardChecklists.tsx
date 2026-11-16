@@ -257,7 +257,7 @@ export function Checklists({
   const byId = (id: number) => lists.find((checklist) => checklist.id === id)!;
   const keys = useReorder({
     ids: lists.map((checklist) => checklist.id),
-    name: (id) => `the checklist “${byId(id).title}”`,
+    name: (id) => byId(id).title,
     onDrop: (id, index) => handle.moveChecklist(byId(id), index),
   });
   const drag = useDragSort((id, index) => handle.moveChecklist(byId(id), index));
@@ -367,7 +367,7 @@ function ChecklistBlock({
   }
   const keys = useReorder({
     ids: visibleIds,
-    name: (id) => `the item “${itemById(id).text}”`,
+    name: (id) => itemById(id).text,
     onDrop: drop,
   });
   const drag = useDragSort(drop);
