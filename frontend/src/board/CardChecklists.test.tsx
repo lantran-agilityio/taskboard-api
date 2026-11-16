@@ -431,6 +431,22 @@ describe("changing checklists", () => {
     ).toBeInTheDocument();
   });
 
+  it("puts an item back when focus leaves it", async () => {
+    const { calls } = serve();
+    const user = await open();
+    const shots_ = await shots();
+
+    shots_.getByRole("button", { name: "Move Window display" }).focus();
+    await user.keyboard(" {ArrowDown}");
+    expect(texts(shots_)).toEqual(["Close-up", "Window display", "Team photo"]);
+    await user.tab();
+
+    await waitFor(() =>
+      expect(texts(shots_)).toEqual(["Window display", "Close-up", "Team photo"]),
+    );
+    expect(calls.some((call) => call.key.startsWith("PATCH"))).toBe(false);
+  });
+
   it("drags an item to the top of its checklist", async () => {
     const { calls } = serve({
       "PATCH /checklist-items/72": patchItem(item(72, "Team photo", false, 2)),

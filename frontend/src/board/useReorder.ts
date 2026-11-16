@@ -6,7 +6,7 @@ import { announce, moveId, type Held } from "./reorder";
 /**
  * Moving one item of a sequence with the keyboard (D13): Space or Enter on its
  * handle picks it up, the up and down arrows move it (on screen only), Space or
- * Enter drops it, which calls `onDrop` once, and Escape puts it back. Each step
+ * Enter drops it, which calls `onDrop` once, and Escape or leaving it puts it back. Each step
  * is announced through `announcement`, for a polite live region.
  */
 export function useReorder({
@@ -31,6 +31,30 @@ export function useReorder({
   useEffect(() => {
     if (held) handles.current.get(held.id)?.focus();
   }, [held]);
+
+  // The latest values, for the blur check, which runs a tick after the render
+  // that scheduled it.
+  const latest = useRef({ held, ids, name });
+  useEffect(() => {
+    latest.current = { held, ids, name };
+  });
+
+  /**
+   * Leaving the held item (a click elsewhere, Tab) cancels the move. Checked
+   * a tick later, because moving the item on screen can blur it for a moment
+   * before the effect above focuses it again.
+   */
+  function onBlur(id: number) {
+    return () => {
+      setTimeout(() => {
+        const { held, ids, name } = latest.current;
+        if (held?.id !== id || handles.current.get(id) === document.activeElement)
+          return;
+        setHeld(null);
+        setAnnouncement(announce("cancel", name(id), held.from, ids.length));
+      });
+    };
+  }
 
   function onKeyDown(id: number) {
     return (event: KeyboardEvent<HTMLElement>) => {
@@ -71,6 +95,7 @@ export function useReorder({
   function handleProps(id: number) {
     return {
       onKeyDown: onKeyDown(id),
+      onBlur: onBlur(id),
       "aria-pressed": held?.id === id,
       ref: (element: HTMLElement | null) => {
         if (element) handles.current.set(id, element);

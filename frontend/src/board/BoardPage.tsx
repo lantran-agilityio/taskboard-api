@@ -66,13 +66,39 @@ export function BoardPage({
   );
 
   useEffect(() => {
-    if (!focus) return;
-    const selector =
-      focus.kind === "card"
-        ? `[data-card="${focus.id}"] .card-link`
-        : `[data-list="${focus.id}"] .grip`;
-    lanes.current?.querySelector<HTMLElement>(selector)?.focus();
+    if (focus) handleOf(focus)?.focus();
   }, [focus, held]);
+
+  // The latest held item and board, for the blur check a tick later.
+  const latest = useRef({ held, view });
+  useEffect(() => {
+    latest.current = { held, view };
+  });
+
+  /** The element a card or list is moved from: the card's link, the list's grip. */
+  function handleOf(item: { kind: "card" | "list"; id: number }): HTMLElement | null {
+    const selector =
+      item.kind === "card"
+        ? `[data-card="${item.id}"] .card-link`
+        : `[data-list="${item.id}"] .grip`;
+    return lanes.current?.querySelector<HTMLElement>(selector) ?? null;
+  }
+
+  /**
+   * Leaving the held card or list (a click elsewhere, Tab) cancels the move.
+   * Checked a tick later, because moving it into another list blurs it for a
+   * moment before the effect above focuses it again.
+   */
+  function onLanesBlur() {
+    setTimeout(() => {
+      const { held, view } = latest.current;
+      if (!held || view.status !== "ready") return;
+      if (handleOf(held) === document.activeElement) return;
+      setHeld(null);
+      setFocus(null);
+      setAnnouncement(words(view.data.lists, held, "cancel"));
+    });
+  }
 
   const cardIds =
     view.status === "ready"
@@ -215,7 +241,7 @@ export function BoardPage({
   /**
    * The keyboard pick-up mode (D13): Space picks the focused card or list up,
    * the arrow keys move it (on screen only), Space or Enter drops it, with one
-   * request, and Escape puts it back. Enter on a card that isn't held still
+   * request, and Escape or leaving it puts it back. Enter on a card that isn't held still
    * opens it.
    */
   function onMoveKey(event: KeyboardEvent<HTMLElement>, pick: () => BoardHeld | null) {
@@ -384,6 +410,7 @@ export function BoardPage({
       )}
       <div
         ref={lanes}
+        onBlur={held ? onLanesBlur : undefined}
         className={
           listDrag && listDropAt !== null && listDropAt >= otherLists.length
             ? "lanes gutter drop-end"

@@ -639,6 +639,34 @@ describe("moving with the keyboard", () => {
     expect(calls.map((call) => call.key)).not.toContain("PATCH /cards/100");
   });
 
+  it("puts a card back when focus leaves it, with no request", async () => {
+    const { calls } = serve();
+    const user = await openBoard();
+    cardLink("To do", "Brief").focus();
+
+    await user.keyboard(" {ArrowRight}");
+    expect(titles("Doing")).toEqual(["Brief", "Budget"]);
+    await user.tab();
+
+    await waitFor(() => expect(titles("To do")).toEqual(["Brief", "Venue"]));
+    expect(titles("Doing")).toEqual(["Budget"]);
+    expect(announced()).toBe("Cancelled. Brief is back at position 1 of 2 in To do.");
+    expect(calls.map((call) => call.key)).not.toContain("PATCH /cards/100");
+  });
+
+  it("puts a list back when something else is clicked", async () => {
+    const { calls } = serve();
+    const user = await openBoard();
+    screen.getByRole("button", { name: "Move list To do" }).focus();
+
+    await user.keyboard("{Enter}{ArrowRight}");
+    expect(laneNames()).toEqual(["Doing", "To do", "Done"]);
+    await user.click(screen.getByRole("button", { name: "Move list Done" }));
+
+    await waitFor(() => expect(laneNames()).toEqual(["To do", "Doing", "Done"]));
+    expect(calls.map((call) => call.key)).not.toContain("PATCH /lists/1");
+  });
+
   it("still opens a card with Enter when it isn't picked up", async () => {
     serve({
       "GET /cards/100/comments": { status: 200, body: { items: [], next: null } },
