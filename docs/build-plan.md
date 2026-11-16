@@ -238,13 +238,13 @@ Done on 2026-11-16 against `main` after step 32: the real app (API and Vite dev 
 | R-CHECK-06: move an item by touch | Held "Publish", let go above "Review" | ✓ on screen and on the server |
 | R-DATE-03: start date | Dates → Start date ticked → Save | ✓ "Nov 16 – Nov 17, 11:19 AM" in the dialog and on the card; logged |
 | R-CHECK-05: item assignee and due date | Item options: the editor, a due date yesterday | ✓ red "Nov 15" and the avatar on the row; the card front "0/2 • Nov 15"; not logged, as the requirement says |
-| R-CHECK-01: add a checklist, then items | Add → title → Enter → type the first item at once | ◐ the first item is lost (issue 7) |
+| R-CHECK-01: add a checklist, then items | Add → title → Enter → type the first item at once | ✓ (was ◐: the first item was lost, issue 7; fixed in #59 and rechecked in Chrome) |
 
 ### Issues found
 
 Fixed in its own PR.
 
-7. **The first item typed straight after adding a checklist is lost** (R-CHECK-01). After Enter in the new checklist's title field, focus goes back to the "Add a checklist" button while the checklist is saved, and only then moves to its "Add an item" field. Keys typed in that gap land on the button. Locally the gap was about 25 ms (the focus log: Enter, then "Lost" typed on the button, then focus on "Add an item"); against a real server it lasts a round trip, so a fast typist loses the first item. The same kind of problem as issue 3. Fix: keep focus in the form until the item field exists (or open the item field at once and queue what's typed, as `useQueue()` does).
+7. **The first item typed straight after adding a checklist is lost** (R-CHECK-01). After Enter in the new checklist's title field, focus goes back to the "Add a checklist" button while the checklist is saved, and only then moves to its "Add an item" field. Keys typed in that gap land on the button. Locally the gap was about 25 ms (the focus log: Enter, then "Lost" typed on the button, then focus on "Add an item"); against a real server it lasts a round trip, so a fast typist loses the first item. The same kind of problem as issue 3. Fix: keep focus in the form until the item field exists (or open the item field at once and queue what's typed, as `useQueue()` does). **Fixed** in #59: the new checklist shows at once, pending, with its item field focused, and items typed meanwhile wait for it.
 
 ## After the build order
 
@@ -261,7 +261,7 @@ Added on 2026-11-13, once step 28 was merged. Each is its own branch and PR.
    - **Reorder checklists and items** (R-CHECK-06), by mouse and keyboard: drag items within their checklist and checklists within the card, with `useReorder` introduced here.
    - **Keyboard moves for cards and lists** (R-CARD-13, R-LIST-09's keyboard part), reusing `useReorder`; left and right move a card into the neighbouring list. Built: the board is two-dimensional, so it has its own pure helpers (`boardKeys.ts`) with `useReorder`'s keys and `announce()` words, rather than the hook itself; Enter on a card that isn't picked up still opens it.
    - **Touch dragging** (R-CARD-12, R-LIST-09's touch part, and R-CHECK-06 by touch): pointer events with a 400 ms hold, edge scrolling, and tests with stubbed `PointerEvent`s, as the drag tests stub `DragEvent`. Built: one hook, `useTouchDrag()`, for all four kinds of item. It feeds the same drag state as the mouse, so the drop indicators and the saves are shared, and it carries a copy of the item (the original fades, as in a mouse drag) rather than moving the item itself, so scrollers can't clip it. jsdom has no layout, so the tests say what is under the finger; how it feels needs a real phone.
-5. **Step 33: recheck the frontend.** Done on 2026-11-16 ("Frontend recheck (step 33)" above): issues 1–6 confirmed fixed and the Coverage tables brought up to date (✓ 57 · — 2), step 32's work checked in a real browser, and one new issue (7) found. Still to do by hand: touch dragging on a real phone.
+5. **Step 33: recheck the frontend.** Done on 2026-11-16 ("Frontend recheck (step 33)" above): issues 1–6 confirmed fixed and the Coverage tables brought up to date (✓ 57 · — 2), step 32's work checked in a real browser, and one new issue (7) found, fixed in #59. Still to do by hand: touch dragging on a real phone.
 
 ## Risks and open questions
 
