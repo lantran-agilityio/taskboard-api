@@ -1,6 +1,12 @@
-import { useRef, useState, type DragEvent, type FormEvent } from "react";
+import {
+  useRef,
+  useState,
+  type DragEvent,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 
-import { DotsIcon } from "../components/icons";
+import { DotsIcon, GripIcon } from "../components/icons";
 import { plural } from "../format";
 import { InlineEdit } from "../components/InlineEdit";
 import { useQueue } from "../components/queue";
@@ -19,6 +25,8 @@ export interface ListActions extends CardActions {
   onAddCard: (listId: number, title: string) => Promise<boolean>;
   onDropCard: (listId: number, index: number) => void;
   onListDragStart: (list: ListWithCards) => void;
+  /** Keys on the list's grip, for moving it with the keyboard (R-LIST-09). */
+  onListKey: (list: ListWithCards, event: KeyboardEvent<HTMLElement>) => void;
 }
 
 /** One list on the board: its name, card count, cards, and the add-card form. */
@@ -31,6 +39,7 @@ export function ListColumn({
   dropListBefore,
   addingCard,
   onAddingCard,
+  held = null,
 }: {
   list: ListWithCards;
   labels: Label[];
@@ -40,6 +49,8 @@ export function ListColumn({
   dropListBefore: boolean;
   addingCard: boolean;
   onAddingCard: (open: boolean) => void;
+  /** The list itself, or one of its cards, picked up with the keyboard. */
+  held?: { kind: "card" | "list"; id: number } | null;
 }) {
   const cardsBox = useRef<HTMLDivElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
@@ -64,6 +75,7 @@ export function ListColumn({
     "list",
     drag?.kind === "list" && drag.id === list.id && "dragging",
     dropListBefore && "drop-before",
+    held?.kind === "list" && held.id === list.id && "held",
   ]
     .filter(Boolean)
     .join(" ");
@@ -106,6 +118,17 @@ export function ListColumn({
         }}
         onDragEnd={actions?.onDragEnd}
       >
+        {actions && (
+          <button
+            type="button"
+            className="ghost sm grip"
+            aria-label={`Move list ${list.name}`}
+            aria-pressed={held?.kind === "list" && held.id === list.id}
+            onKeyDown={(event) => actions.onListKey(list, event)}
+          >
+            <GripIcon />
+          </button>
+        )}
         <h2>
           <InlineEdit
             value={list.name}
@@ -148,6 +171,7 @@ export function ListColumn({
             actions={actions}
             dragging={cardDrag?.id === card.id}
             dropBefore={dropAt !== null && others[dropAt]?.id === card.id}
+            held={held?.kind === "card" && held.id === card.id}
           />
         ))}
       </div>

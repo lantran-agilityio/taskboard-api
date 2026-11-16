@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, KeyboardEvent } from "react";
 
 import {
   ArchiveIcon,
@@ -48,7 +48,12 @@ export interface CardActions {
   onArchive: (card: Card) => void;
   onDragStart: (card: Card) => void;
   onDragEnd: () => void;
+  /** Keys on the card's link, for moving it with the keyboard (R-CARD-13). */
+  onKey?: (card: Card, event: KeyboardEvent<HTMLElement>) => void;
 }
+
+/** The id of the board's hint on how to move a card with the keyboard. */
+export const CARD_MOVE_HINT = "card-move-hint";
 
 /**
  * A card's summary on the board (R-CARD-02). Its title links to #card-<id>,
@@ -62,6 +67,7 @@ export function CardFront({
   actions,
   dragging = false,
   dropBefore = false,
+  held = false,
 }: {
   card: Card;
   labels: Label[];
@@ -70,6 +76,8 @@ export function CardFront({
   actions?: CardActions;
   dragging?: boolean;
   dropBefore?: boolean;
+  /** Picked up with the keyboard. */
+  held?: boolean;
 }) {
   const cardLabels = card.label_ids
     .map((id) => labels.find((label) => label.id === id))
@@ -87,6 +95,7 @@ export function CardFront({
         card.due_complete && "is-done",
         dragging && "dragging",
         dropBefore && "drop-before",
+        held && "held",
       ]
         .filter(Boolean)
         .join(" ")}
@@ -142,6 +151,8 @@ export function CardFront({
           href={`#card-${card.id}`}
           // Dragging starts on the card, not the link (whose drag carries its URL).
           draggable={false}
+          aria-describedby={actions ? CARD_MOVE_HINT : undefined}
+          onKeyDown={actions?.onKey && ((event) => actions.onKey?.(card, event))}
         >
           {card.title}
         </a>
