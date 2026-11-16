@@ -616,8 +616,8 @@ As a member, I can read a card's own history in the card, with system events (su
 **Design decisions for the build plan** (not for the product to answer):
 
 10. **Restoring:** the product restores lists and cards beside their old neighbours; the API restored to the end before step 19, and now to the old index (D1).
-11. **Deleting:** the product deletes only after archiving and erases a deleted card's history; the API deletes directly and keeps a "deleted" entry in the log.
-12. **Empty rename:** the product silently keeps the old name; the API returns 422.
+11. **Deleting:** the product deletes only after archiving and erases a deleted card's history; the API deletes directly and keeps a "deleted" entry in the log. The frontend offers delete only for archived items and closed boards (D2), and the log keeps the entry (D3).
+12. **Empty rename:** the product silently keeps the old name; the API returns 422. The frontend keeps the old name without calling the API, and the API keeps its 422 (D4).
 13. **Roles:** the product allows several admins (now confirmed, R-MEMBER-05); the API has exactly one owner plus editors and viewers. Kept in step 31 (D5).
-14. **Labels:** the product has 30 colours, unnamed labels and labels without a colour; the API has 6 colours and requires names.
-15. **Boards:** closing a board is a new state the API doesn't have.
+14. **Labels:** the product has 30 colours, unnamed labels and labels without a colour; the API had 6 colours and required names. Names became optional and new boards got six unnamed labels in #22 (D6); the API keeps its 6 colours and a colour stays required.
+15. **Boards:** closing a board was a new state the API didn't have. Added in #24 (D7): the owner closes and reopens, and a closed board is read-only for everyone.
