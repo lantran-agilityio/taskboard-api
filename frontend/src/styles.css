@@ -1658,3 +1658,26 @@ textarea.field {
 .checklist.drop-before {
   box-shadow: 0 -6px 0 -2px var(--accent);
 }
+
+/* Touch dragging (D13): the copy the finger carries, laid over the page. */
+.touch-ghost {
+  position: fixed;
+  z-index: 1000;
+  margin: 0;
+  pointer-events: none;
+  opacity: 0.92;
+  box-shadow: var(--shadow-lg);
+  list-style: none;
+}
+/* On touch screens a long press picks an item up, so it mustn't also select
+   text or open the browser's menu for the card's link. */
+@media (hover: none) {
+  .card,
+  .list-head,
+  .item,
+  .checklist .blk-head {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}

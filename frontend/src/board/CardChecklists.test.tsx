@@ -15,6 +15,7 @@ import type { Checklist, ChecklistItem } from "../api/checklists";
 import { TOKEN_KEY } from "../auth/session";
 import { boardInfo, card, LABELS, list, MEMBERS } from "../test/boardData";
 import { fakeApi, meFor, type FakeResponse } from "../test/fakeApi";
+import { finger, installFakePointer } from "../test/finger";
 import { FakeWebSocket, installFakeWebSocket } from "../test/fakeSocket";
 
 const BRIEF = card(100, 1, { title: "Brief", checklist_done: 1, checklist_total: 3 });
@@ -123,6 +124,7 @@ function patchItem(base: ChecklistItem): Handler {
 
 beforeEach(() => {
   vi.stubGlobal("DragEvent", DragEventWithPointer);
+  installFakePointer();
   window.localStorage.clear();
   window.localStorage.setItem(TOKEN_KEY, "t1");
   installFakeWebSocket();
@@ -460,6 +462,51 @@ describe("changing checklists", () => {
 
     expect(texts(shots_)).toEqual(["Team photo", "Window display", "Close-up"]);
     expect(bodiesOf(calls, "PATCH /checklist-items/72")).toEqual([{ position: 0 }]);
+  });
+
+  it("drags an item by touch, holding it first", async () => {
+    const { calls } = serve({
+      "PATCH /checklist-items/72": patchItem(item(72, "Team photo", false, 2)),
+    });
+    await open();
+    const shots_ = await shots();
+    const row = shots_.getByText("Team photo").closest("li")!;
+
+    finger.down(row, 40, 300);
+    finger.hold();
+    expect(row).toHaveClass("dragging");
+    finger.move(40, -10);
+    finger.up(40, -10);
+
+    expect(texts(shots_)).toEqual(["Team photo", "Window display", "Close-up"]);
+    expect(bodiesOf(calls, "PATCH /checklist-items/72")).toEqual([{ position: 0 }]);
+  });
+
+  it("drags a checklist by touch, by its header", async () => {
+    const photos: Checklist = {
+      ...SHOTS,
+      id: 8,
+      title: "Props",
+      position: 1,
+      items: [],
+    };
+    const { calls } = serve(
+      { "PATCH /checklists/8": { status: 200, body: { ...photos, position: 0 } } },
+      {},
+      [SHOTS, photos],
+    );
+    await open();
+    await shots();
+    const header = screen
+      .getByRole("region", { name: "Props" })
+      .querySelector(".blk-head")!;
+
+    finger.down(header, 40, 300);
+    finger.hold();
+    finger.move(40, -10);
+    finger.up(40, -10);
+
+    expect(bodiesOf(calls, "PATCH /checklists/8")).toEqual([{ position: 0 }]);
   });
 
   it("moves an item among the shown ones while ticked items are hidden", async () => {

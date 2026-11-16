@@ -390,6 +390,7 @@ function ChecklistBlock({
         draggable={sort ? true : undefined}
         onDragStart={sort?.drag.onDragStart}
         onDragEnd={sort?.drag.onDragEnd}
+        onPointerDown={sort?.drag.onPointerDown}
       >
         {sort && (
           <button

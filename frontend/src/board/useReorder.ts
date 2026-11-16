@@ -1,7 +1,15 @@
-import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type DragEvent,
+  type KeyboardEvent,
+  type PointerEvent,
+} from "react";
 
-import { dropIndex, type Span } from "./dnd";
+import { indexAmong } from "./dnd";
 import { announce, moveId, type Held } from "./reorder";
+import { useTouchDrag } from "./useTouchDrag";
 
 /**
  * Moving one item of a sequence with the keyboard (D13): Space or Enter on its
@@ -108,8 +116,9 @@ export function useReorder({
 }
 
 /**
- * Mouse dragging within one vertical sequence, with the browser's own drag and
- * drop (as cards and lists do). Items carry `data-sort-id`; the container
+ * Mouse and touch dragging within one vertical sequence: the browser's own
+ * drag and drop for the mouse (as cards and lists do), `useTouchDrag()` for
+ * touch. Items carry `data-sort-id`; the container
  * works out where the dragged one would land among the others, by their
  * middles (`dropIndex()`), and calls `onDrop` with that 0-based position.
  * Another sequence's drag passes through untouched, so nested sequences (items
@@ -119,22 +128,38 @@ export function useDragSort(onDrop: (id: number, index: number) => void) {
   const [dragId, setDragId] = useState<number | null>(null);
   const [dropAt, setDropAt] = useState<number | null>(null);
 
-  function indexAt(container: HTMLElement, pointer: number): number {
-    const others: Span[] = [];
-    for (const element of container.querySelectorAll<HTMLElement>(
-      ":scope > [data-sort-id]",
-    )) {
-      if (Number(element.dataset.sortId) === dragId) continue;
-      const box = element.getBoundingClientRect();
-      others.push({ start: box.top, size: box.height });
-    }
-    return dropIndex(others, pointer);
+  // The sequence a touch drag started in: the finger can wander out of it.
+  const touchContainer = useRef<HTMLElement | null>(null);
+
+  function indexAt(container: HTMLElement | null, pointer: number, id: number | null) {
+    if (!container) return 0;
+    return indexAmong(
+      container.querySelectorAll<HTMLElement>(":scope > [data-sort-id]"),
+      (element) => Number(element.dataset.sortId) === id,
+      "y",
+      pointer,
+    );
   }
 
   function end() {
     setDragId(null);
     setDropAt(null);
   }
+
+  const touch = useTouchDrag<number>({
+    onStart: (id, element) => {
+      touchContainer.current =
+        element.closest<HTMLElement>("[data-sort-id]")?.parentElement ?? null;
+      setDragId(id);
+    },
+    onMove: (id, at) => setDropAt(indexAt(touchContainer.current, at.y, id)),
+    onDrop: (id, at) => {
+      const index = indexAt(touchContainer.current, at.y, id);
+      end();
+      onDrop(id, index);
+    },
+    onCancel: end,
+  });
 
   return {
     dragId,
@@ -151,6 +176,7 @@ export function useDragSort(onDrop: (id: number, index: number) => void) {
           setDragId(id);
         },
         onDragEnd: end,
+        onPointerDown: (event: PointerEvent<HTMLElement>) => touch(id, event),
       };
     },
     containerProps: {
@@ -159,13 +185,13 @@ export function useDragSort(onDrop: (id: number, index: number) => void) {
         event.preventDefault(); // allows the drop
         event.stopPropagation();
         event.dataTransfer.dropEffect = "move";
-        setDropAt(indexAt(event.currentTarget, event.clientY));
+        setDropAt(indexAt(event.currentTarget, event.clientY, dragId));
       },
       onDrop: (event: DragEvent<HTMLElement>) => {
         if (dragId === null) return;
         event.preventDefault();
         event.stopPropagation();
-        const index = indexAt(event.currentTarget, event.clientY);
+        const index = indexAt(event.currentTarget, event.clientY, dragId);
         const id = dragId;
         end();
         onDrop(id, index);
