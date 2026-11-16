@@ -18,9 +18,17 @@ import {
   words,
   type BoardHeld,
 } from "./boardKeys";
-import { dropIndex, isNoMove, type Span } from "./dnd";
+import { indexAmong, isNoMove } from "./dnd";
 import * as local from "./edits";
-import { AddListColumn, ListColumn, type Drag, type ListActions } from "./ListColumn";
+import {
+  AddListColumn,
+  cardIndexAt,
+  ListColumn,
+  type Drag,
+  type ListActions,
+} from "./ListColumn";
+import type { Point } from "./touch";
+import { useTouchDrag } from "./useTouchDrag";
 import { ListMenu } from "./ListMenu";
 import type { BoardData, Card } from "./model";
 import { errorMessage, useBoard } from "./useBoard";
@@ -65,16 +73,6 @@ export function BoardPage({
     null,
   );
 
-  useEffect(() => {
-    if (focus) handleOf(focus)?.focus();
-  }, [focus, held]);
-
-  // The latest held item and board, for the blur check a tick later.
-  const latest = useRef({ held, view });
-  useEffect(() => {
-    latest.current = { held, view };
-  });
-
   /** The element a card or list is moved from: the card's link, the list's grip. */
   function handleOf(item: { kind: "card" | "list"; id: number }): HTMLElement | null {
     const selector =
@@ -83,6 +81,44 @@ export function BoardPage({
         : `[data-list="${item.id}"] .grip`;
     return lanes.current?.querySelector<HTMLElement>(selector) ?? null;
   }
+
+  useEffect(() => {
+    if (focus) handleOf(focus)?.focus();
+  }, [focus, held]);
+
+  // Touch dragging (R-CARD-12, R-LIST-09): the same `drag` as the mouse, plus
+  // the list and place under the finger, which the mouse gets from dragover.
+  const [touchDrop, setTouchDrop] = useState<{ list: number; index: number } | null>(
+    null,
+  );
+  const touch = useTouchDrag<{ kind: "card" | "list"; id: number }>({
+    onStart: (item) => (item.kind === "card" ? dragCard(item.id) : dragList(item.id)),
+    onMove: (item, at) =>
+      item.kind === "card"
+        ? setTouchDrop(cardTargetAt(at, item.id))
+        : setListDropAt(listIndexAt(at.x, item.id)),
+    onDrop: (item, at) => {
+      if (item.kind === "list") {
+        dropList(at.x);
+        return;
+      }
+      const target = cardTargetAt(at, item.id);
+      setTouchDrop(null);
+      // Let go outside any list: the card goes back.
+      if (target) listActions.onDropCard(target.list, target.index);
+      else endDrag();
+    },
+    onCancel: () => {
+      setTouchDrop(null);
+      endDrag();
+    },
+  });
+
+  // The latest held item and board, for the blur check a tick later.
+  const latest = useRef({ held, view });
+  useEffect(() => {
+    latest.current = { held, view };
+  });
 
   /**
    * Leaving the held card or list (a click elsewhere, Tab) cancels the move.
@@ -193,16 +229,9 @@ export function BoardPage({
         (data) => local.removeCard(data, card.id),
         () => edit.archiveCard(token, card.id),
       ),
-    onDragStart: (card: Card) => {
-      const fromList = lists.find((list) => list.cards.some((c) => c.id === card.id));
-      if (!fromList) return;
-      const fromIndex = fromList.cards.findIndex((c) => c.id === card.id);
-      setDrag({ kind: "card", id: card.id, fromList: fromList.id, fromIndex });
-    },
-    onDragEnd: () => {
-      setDrag(null);
-      setListDropAt(null);
-    },
+    onDragStart: (card: Card) => dragCard(card.id),
+    onDragEnd: endDrag,
+    onTouch: (card, event) => touch({ kind: "card", id: card.id }, event),
     onKey: (card, event) => onMoveKey(event, () => pickCard(realLists, card.id)),
   };
 
@@ -233,8 +262,8 @@ export function BoardPage({
         () => edit.updateCard(token, id, { list_id: listId, position: index }),
       );
     },
-    onListDragStart: (list) =>
-      setDrag({ kind: "list", id: list.id, fromIndex: lists.indexOf(list) }),
+    onListDragStart: (list) => dragList(list.id),
+    onListTouch: (list, event) => touch({ kind: "list", id: list.id }, event),
     onListKey: (list, event) => onMoveKey(event, () => pickList(realLists, list.id)),
   };
 
@@ -297,15 +326,53 @@ export function BoardPage({
     );
   }
 
+  function dragCard(cardId: number) {
+    const fromList = lists.find((list) => list.cards.some((c) => c.id === cardId));
+    if (!fromList) return;
+    const fromIndex = fromList.cards.findIndex((c) => c.id === cardId);
+    setDrag({ kind: "card", id: cardId, fromList: fromList.id, fromIndex });
+  }
+
+  function dragList(listId: number) {
+    setDrag({
+      kind: "list",
+      id: listId,
+      fromIndex: lists.findIndex((list) => list.id === listId),
+    });
+  }
+
+  function endDrag() {
+    setDrag(null);
+    setListDropAt(null);
+  }
+
+  /** Drops the dragged list where `clientX` puts it, if that's a move. */
+  function dropList(clientX: number) {
+    if (drag?.kind !== "list") return;
+    const index = listIndexAt(clientX, drag.id);
+    endDrag();
+    if (index !== drag.fromIndex) moveList(drag.id, index);
+  }
+
   /** Where a dragged list would land, among the other lists. */
   function listIndexAt(clientX: number, draggedId: number): number {
-    const others: Span[] = [];
-    lanes.current?.querySelectorAll<HTMLElement>("[data-list]").forEach((element) => {
-      if (Number(element.dataset.list) === draggedId) return;
-      const box = element.getBoundingClientRect();
-      others.push({ start: box.left, size: box.width });
-    });
-    return dropIndex(others, clientX);
+    return indexAmong(
+      lanes.current?.querySelectorAll<HTMLElement>("[data-list]") ?? [],
+      (element) => Number(element.dataset.list) === draggedId,
+      "x",
+      clientX,
+    );
+  }
+
+  /** The list under a finger dragging a card, and where among its cards it would land. */
+  function cardTargetAt(at: Point, cardId: number) {
+    const under = document.elementFromPoint?.(at.x, at.y);
+    const column = under?.closest<HTMLElement>("[data-list]");
+    if (!column || !lanes.current?.contains(column)) return null;
+    return {
+      list: Number(column.dataset.list),
+      index: cardIndexAt(column, cardId, at.y),
+    };
   }
 
   const listDrag = drag?.kind === "list" ? drag : null;
@@ -425,10 +492,7 @@ export function BoardPage({
         onDrop={(event) => {
           if (!listDrag) return;
           event.preventDefault();
-          const index = listIndexAt(event.clientX, listDrag.id);
-          setDrag(null);
-          setListDropAt(null);
-          if (index !== listDrag.fromIndex) moveList(listDrag.id, index);
+          dropList(event.clientX);
         }}
       >
         {lists.length === 0 && !canEdit && (
@@ -450,6 +514,7 @@ export function BoardPage({
             addingCard={addingCardTo === list.id}
             onAddingCard={(open) => setAddingCardTo(open ? list.id : null)}
             held={held}
+            touchDropAt={touchDrop?.list === list.id ? touchDrop.index : null}
           />
         ))}
         {canEdit && (

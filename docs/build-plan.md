@@ -152,7 +152,7 @@ Done on 2026-11-13 against `main` after step 28: the real app (API and Vite dev 
 | R-LIST-06 Archive a list | Archive this list…, confirmed; shows under Archived items → Lists | ✓ | clicked |
 | R-LIST-07 Restore to original position | Restore puts it back where it was | ✓ | clicked |
 | R-LIST-08 Delete an archived list | Only from Archived items, after a warning | ✓ | clicked, tests |
-| R-LIST-09 Move a list by touch or keyboard *(step 32)* | Keyboard: the "Move list …" grip in the list header; Space or Enter picks it up, left and right move it, announced | ◐ keyboard built; touch comes with the touch PR | tests |
+| R-LIST-09 Move a list by touch or keyboard *(step 32)* | Keyboard: the "Move list …" grip in the list header; Space or Enter picks it up, left and right move it, announced. Touch: hold the header 400 ms, then drag sideways; the lanes scroll near their edges | ✓ | tests; check on a real touch device |
 | R-CARD-01 Add cards quickly | + Add a card; stays open; Escape or spaces close it | ◐ fast typing loses titles (issue 3) | clicked |
 | R-CARD-02 Card front summary | Labels, done check, due badge, checklist done/total, comment count, description icon, avatars | ✓ | clicked |
 | R-CARD-03 Own address | `#card-<id>` dialog over the board with list, details, description, comments and activity | ✓ (D9) | clicked |
@@ -164,7 +164,7 @@ Done on 2026-11-13 against `main` after step 28: the real app (API and Vite dev 
 | R-CARD-09 Restore a card | Logged "sent this card to the board"; back at its old position | ✓ | clicked |
 | R-CARD-10 Delete an archived card | Delete for good…, warns it's permanent | ✓ (D3: the log keeps a note) | tests |
 | R-CARD-11 Assign members | Members picker searches board members; avatars; "joined this card" | ✓ | clicked |
-| R-CARD-12 Move a card by touch *(step 32)* | — | not built yet | — |
+| R-CARD-12 Move a card by touch *(step 32)* | Hold a card 400 ms (a tap opens it, a swipe scrolls); a copy follows the finger, the drop place shows as for the mouse, scrollers scroll near their edges; let go outside a list and it goes back | ✓ | tests; check on a real touch device |
 | R-CARD-13 Move a card with the keyboard *(step 32)* | Space on a focused card picks it up; up and down within its list, left and right into the neighbouring list; Space or Enter drops (one `PATCH`), Escape puts it back; announced with the list's name | ✓ | tests |
 | R-LABEL-01 Default labels | Six unnamed colours on a new board | ✓ | clicked |
 | R-LABEL-02 Apply labels | Picker with search, in colour order | ✓ | clicked |
@@ -176,7 +176,7 @@ Done on 2026-11-13 against `main` after step 28: the real app (API and Vite dev 
 | R-DATE-03 Start date *(step 32)* | Card → Dates: start and due ticked on or off, kept in order; a range on the card | ✓ (logged, unlike the product) | tests |
 | R-CHECK-01 to R-CHECK-04 | Checklists in the card dialog (step 28) | ✓ | clicked (step 28), tests |
 | R-CHECK-05 Item assignee and due date *(step 32)* | Item options: assignee and due date; shown on the row; the card front adds the next item due | ✓ (set from the item's options, not while adding it) | tests |
-| R-CHECK-06 Reorder checklists and items *(step 32)* | Drag items and checklists (by the header); "Move …" grips for the keyboard, announced | ✓ by mouse and keyboard; touch comes with the touch PR | tests |
+| R-CHECK-06 Reorder checklists and items *(step 32)* | Drag items and checklists (by the header); "Move …" grips for the keyboard, announced | ✓ by mouse, keyboard and touch (hold an item, or a checklist's header) | tests |
 | R-COMMENT-01 Comment on a card | Composer at the top; name and relative time; mixed with activity; front count | ✓ | clicked |
 | R-COMMENT-02 Edit my comment | Edit, Save, "Discard changes", "(edited)" | ✓ | tests |
 | R-COMMENT-03 Delete my comment | After a confirmation | ✓ | tests |
@@ -184,7 +184,7 @@ Done on 2026-11-13 against `main` after step 28: the real app (API and Vite dev 
 | R-ACTIVITY-01 Board activity log | Menu → Activity, All or Comments, paged | ◐ old values missing from renames (issue 2) | clicked |
 | R-ACTIVITY-02 Card activity log | In the dialog, Hide/Show details | ✓ | clicked |
 
-Tally (52 requirements): ✓ 44 · ◐ 5 (issues 1–3) · — 3. With step 31's three new member requirements (55): ✓ 46 · ◐ 5 · — 2 (R-MEMBER-05, R-MEMBER-09) · not built 2 (R-DATE-03, R-CHECK-05, step 32). Both built in step 32: ✓ 48 · ◐ 5 · — 2.
+Tally (52 requirements): ✓ 44 · ◐ 5 (issues 1–3) · — 3. With step 31's three new member requirements (55): ✓ 46 · ◐ 5 · — 2 (R-MEMBER-05, R-MEMBER-09) · not built 2 (R-DATE-03, R-CHECK-05, step 32). Both built in step 32: ✓ 48 · ◐ 5 · — 2. With step 32's four `ours` requirements (59), all built: ✓ 52 · ◐ 5 · — 2.
 
 ### Issues found
 
@@ -232,7 +232,7 @@ Added on 2026-11-13, once step 28 was merged. Each is its own branch and PR.
    Then the requirements step 32 added (`ours` in `requirements.md`), all frontend only (D13), each its own branch and PR:
    - **Reorder checklists and items** (R-CHECK-06), by mouse and keyboard: drag items within their checklist and checklists within the card, with `useReorder` introduced here.
    - **Keyboard moves for cards and lists** (R-CARD-13, R-LIST-09's keyboard part), reusing `useReorder`; left and right move a card into the neighbouring list. Built: the board is two-dimensional, so it has its own pure helpers (`boardKeys.ts`) with `useReorder`'s keys and `announce()` words, rather than the hook itself; Enter on a card that isn't picked up still opens it.
-   - **Touch dragging** (R-CARD-12, R-LIST-09's touch part, and R-CHECK-06 by touch): pointer events with a 400 ms hold, edge scrolling, and tests with stubbed `PointerEvent`s, as the drag tests stub `DragEvent`.
+   - **Touch dragging** (R-CARD-12, R-LIST-09's touch part, and R-CHECK-06 by touch): pointer events with a 400 ms hold, edge scrolling, and tests with stubbed `PointerEvent`s, as the drag tests stub `DragEvent`. Built: one hook, `useTouchDrag()`, for all four kinds of item. It feeds the same drag state as the mouse, so the drop indicators and the saves are shared, and it carries a copy of the item (the original fades, as in a mouse drag) rather than moving the item itself, so scrollers can't clip it. jsdom has no layout, so the tests say what is under the finger; how it feels needs a real phone.
 
 ## Risks and open questions
 

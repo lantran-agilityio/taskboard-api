@@ -1,4 +1,4 @@
-import type { CSSProperties, KeyboardEvent } from "react";
+import type { CSSProperties, KeyboardEvent, PointerEvent } from "react";
 
 import {
   ArchiveIcon,
@@ -50,6 +50,8 @@ export interface CardActions {
   onDragEnd: () => void;
   /** Keys on the card's link, for moving it with the keyboard (R-CARD-13). */
   onKey?: (card: Card, event: KeyboardEvent<HTMLElement>) => void;
+  /** A finger pressed on the card, for touch dragging (R-CARD-12). */
+  onTouch?: (card: Card, event: PointerEvent<HTMLElement>) => void;
 }
 
 /** The id of the board's hint on how to move a card with the keyboard. */
@@ -113,6 +115,7 @@ export function CardFront({
           : undefined
       }
       onDragEnd={actions?.onDragEnd}
+      onPointerDown={actions?.onTouch && ((event) => actions.onTouch?.(card, event))}
     >
       {cardLabels.length > 0 && (
         <div className="card-lbls">

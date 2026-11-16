@@ -14,6 +14,7 @@ import type { Board } from "../api/boards";
 import { TOKEN_KEY } from "../auth/session";
 import { boardInfo, card, LABELS, list, MEMBERS } from "../test/boardData";
 import { fakeApi, meFor, type FakeResponse } from "../test/fakeApi";
+import { finger, installFakePointer } from "../test/finger";
 import { FakeWebSocket, installFakeWebSocket } from "../test/fakeSocket";
 import type { ListWithCards } from "./model";
 
@@ -98,6 +99,7 @@ class DragEventWithPointer extends MouseEvent {}
 
 beforeEach(() => {
   vi.stubGlobal("DragEvent", DragEventWithPointer);
+  installFakePointer();
   window.localStorage.setItem(TOKEN_KEY, "t1");
   window.location.hash = "#board-1";
   installFakeWebSocket();
@@ -589,6 +591,111 @@ describe("dragging", () => {
 
     expect(laneNames()).toEqual(["Doing", "To do", "Done"]);
     expect(bodiesOf(calls, "PATCH /lists/2")).toEqual([{ position: 0 }]);
+  });
+});
+
+describe("dragging by touch", () => {
+  function ghost() {
+    return document.querySelector(".touch-ghost");
+  }
+
+  it("holds a card, carries it to another list, and drops it there", async () => {
+    const { calls } = serve({
+      "PATCH /cards/100": { status: 200, body: card(100, 3) },
+    });
+    await openBoard();
+    const brief = lane("To do").getAllByRole("article")[0]!;
+    const done = screen.getByRole("region", { name: "Done" });
+
+    finger.down(brief, 50, 50);
+    finger.hold();
+    expect(brief).toHaveClass("dragging");
+    expect(ghost()).toHaveTextContent("Brief");
+    finger.move(600, 80, done.querySelector(".cards")!);
+    expect(ghost()).toHaveStyle({ transform: "translate(550px, 30px)" });
+    expect(done.querySelector(".cards")).toHaveClass("drop-end");
+    finger.up(600, 80);
+
+    expect(ghost()).toBeNull();
+    expect(titles("To do")).toEqual(["Venue"]);
+    expect(titles("Done")).toEqual(["Brief"]);
+    expect(bodiesOf(calls, "PATCH /cards/100")).toEqual([{ list_id: 3, position: 0 }]);
+  });
+
+  it("leaves a quick tap alone, so it still opens the card", async () => {
+    const { calls } = serve();
+    await openBoard();
+    const brief = lane("To do").getAllByRole("article")[0]!;
+
+    finger.down(brief, 50, 50);
+    finger.up(50, 50);
+
+    expect(brief).not.toHaveClass("dragging");
+    expect(ghost()).toBeNull();
+    expect(calls.map((call) => call.key)).not.toContain("PATCH /cards/100");
+  });
+
+  it("leaves a swipe to scroll the page", async () => {
+    serve();
+    await openBoard();
+    const brief = lane("To do").getAllByRole("article")[0]!;
+
+    finger.down(brief, 50, 50);
+    finger.move(50, 90);
+    finger.hold();
+
+    expect(brief).not.toHaveClass("dragging");
+    expect(ghost()).toBeNull();
+    finger.up(50, 90);
+  });
+
+  it("puts a card back when it's let go outside any list", async () => {
+    const { calls } = serve();
+    await openBoard();
+    const brief = lane("To do").getAllByRole("article")[0]!;
+
+    finger.down(brief, 50, 50);
+    finger.hold();
+    finger.move(50, 900, document.body);
+    finger.up(50, 900);
+
+    expect(titles("To do")).toEqual(["Brief", "Venue"]);
+    expect(brief).not.toHaveClass("dragging");
+    expect(calls.map((call) => call.key)).not.toContain("PATCH /cards/100");
+  });
+
+  it("moves a list by its header", async () => {
+    const { calls } = serve({
+      "PATCH /lists/2": { status: 200, body: list(2, "Doing") },
+    });
+    await openBoard();
+    const header = screen
+      .getByRole("region", { name: "Doing" })
+      .querySelector(".list-head")!;
+
+    finger.down(header, 300, 20);
+    finger.hold();
+    finger.move(-10, 20);
+    expect(screen.getByRole("region", { name: "To do" })).toHaveClass("drop-before");
+    finger.up(-10, 20);
+
+    expect(laneNames()).toEqual(["Doing", "To do", "Done"]);
+    expect(bodiesOf(calls, "PATCH /lists/2")).toEqual([{ position: 0 }]);
+  });
+
+  it("ignores the mouse, which drags with the browser's own drag and drop", async () => {
+    serve();
+    await openBoard();
+    const brief = lane("To do").getAllByRole("article")[0]!;
+
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    fireEvent.pointerDown(brief, { pointerType: "mouse", pointerId: 1 });
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    vi.useRealTimers();
+
+    expect(brief).not.toHaveClass("dragging");
   });
 });
 

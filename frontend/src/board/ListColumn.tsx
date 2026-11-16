@@ -4,6 +4,7 @@ import {
   type DragEvent,
   type FormEvent,
   type KeyboardEvent,
+  type PointerEvent,
 } from "react";
 
 import { DotsIcon, GripIcon } from "../components/icons";
@@ -11,7 +12,7 @@ import { plural } from "../format";
 import { InlineEdit } from "../components/InlineEdit";
 import { useQueue } from "../components/queue";
 import { CardFront, type CardActions } from "./CardFront";
-import { dropIndex, type Span } from "./dnd";
+import { indexAmong } from "./dnd";
 import type { Label, ListWithCards, Member } from "./model";
 
 /** What is being dragged right now, and where it came from. */
@@ -27,6 +28,8 @@ export interface ListActions extends CardActions {
   onListDragStart: (list: ListWithCards) => void;
   /** Keys on the list's grip, for moving it with the keyboard (R-LIST-09). */
   onListKey: (list: ListWithCards, event: KeyboardEvent<HTMLElement>) => void;
+  /** A finger pressed on the list's header, for touch dragging (R-LIST-09). */
+  onListTouch: (list: ListWithCards, event: PointerEvent<HTMLElement>) => void;
 }
 
 /** One list on the board: its name, card count, cards, and the add-card form. */
@@ -40,6 +43,7 @@ export function ListColumn({
   addingCard,
   onAddingCard,
   held = null,
+  touchDropAt = null,
 }: {
   list: ListWithCards;
   labels: Label[];
@@ -51,23 +55,18 @@ export function ListColumn({
   onAddingCard: (open: boolean) => void;
   /** The list itself, or one of its cards, picked up with the keyboard. */
   held?: { kind: "card" | "list"; id: number } | null;
+  /** Where a card dragged by touch would land in this list, if it's over it. */
+  touchDropAt?: number | null;
 }) {
   const cardsBox = useRef<HTMLDivElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
-  const [dropAt, setDropAt] = useState<number | null>(null);
+  const [mouseDropAt, setDropAt] = useState<number | null>(null);
+  const dropAt = mouseDropAt ?? touchDropAt;
   const cardDrag = drag?.kind === "card" ? drag : null;
 
   /** Where the dragged card would land: among this list's other cards. */
   function indexAt(event: DragEvent): number {
-    const others: Span[] = [];
-    cardsBox.current
-      ?.querySelectorAll<HTMLElement>("[data-card]")
-      .forEach((element) => {
-        if (Number(element.dataset.card) === cardDrag?.id) return;
-        const box = element.getBoundingClientRect();
-        others.push({ start: box.top, size: box.height });
-      });
-    return dropIndex(others, event.clientY);
+    return cardIndexAt(cardsBox.current, cardDrag?.id ?? null, event.clientY);
   }
 
   const others = list.cards.filter((card) => card.id !== cardDrag?.id);
@@ -117,6 +116,7 @@ export function ListColumn({
           actions.onListDragStart(list);
         }}
         onDragEnd={actions?.onDragEnd}
+        onPointerDown={actions && ((event) => actions.onListTouch(list, event))}
       >
         {actions && (
           <button
@@ -187,6 +187,21 @@ export function ListColumn({
           </button>
         ))}
     </section>
+  );
+}
+
+/** Where a dragged card would land among a list's other cards (mouse or touch). */
+export function cardIndexAt(
+  container: HTMLElement | null,
+  draggedId: number | null,
+  clientY: number,
+): number {
+  if (!container) return 0;
+  return indexAmong(
+    container.querySelectorAll<HTMLElement>("[data-card]"),
+    (element) => Number(element.dataset.card) === draggedId,
+    "y",
+    clientY,
   );
 }
 
