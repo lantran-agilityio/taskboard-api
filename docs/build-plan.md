@@ -128,8 +128,8 @@ Done on 2026-11-13 against `main` after step 28: the real app (API and Vite dev 
 | Requirement | In the app | Result | Checked |
 | --- | --- | --- | --- |
 | R-BOARD-01 See my boards | Home: Starred, Recently opened, All boards; closed boards left out | ✓ | clicked |
-| R-BOARD-02 Create a board | Home → Create a board; spaces keep Create disabled with "A title is required"; opens the new, empty board | ◐ the creation isn't logged (issue 1) | clicked |
-| R-BOARD-03 Rename in place | Board title; Enter saves, the page title follows; empty keeps the old one | ◐ the log says "changed the board", not old → new (issue 2) | clicked |
+| R-BOARD-02 Create a board | Home → Create a board; spaces keep Create disabled with "A title is required"; opens the new, empty board | ✓ (was ◐: the creation wasn't logged, issue 1; fixed in #42, rechecked in step 33) | clicked |
+| R-BOARD-03 Rename in place | Board title; Enter saves, the page title follows; empty keeps the old one | ✓ (was ◐: the log said "changed the board", not old → new, issue 2; fixed in #43, rechecked in step 33) | clicked |
 | R-BOARD-04 Star a board | Star in the board bar and on tiles; a Starred row on home | ✓ | clicked |
 | R-BOARD-05 Board description | Menu → About, editable by editors and the owner | ✓ | clicked, tests |
 | R-BOARD-06 Close a board | Menu → Close board…, "You can reopen it later"; banner with Reopen; read-only | ✓ | clicked |
@@ -144,7 +144,7 @@ Done on 2026-11-13 against `main` after step 28: the real app (API and Vite dev 
 | R-MEMBER-07 Observer role *(step 31)* | Viewer: no edit controls, read-only card dialog | ✓ (D5) | clicked (as the viewer) |
 | R-MEMBER-08 Change roles and remove people *(step 31)* | Share: the owner changes roles and removes people after a confirmation | ✓ (owner only, D5) | tests |
 | R-MEMBER-09 Who may comment and invite *(step 31)* | — | — (D5) | — |
-| R-LIST-01 Add lists quickly | + Add another list; stays open, Escape closes, spaces add nothing | ◐ fast typing loses names (issue 3) | clicked |
+| R-LIST-01 Add lists quickly | + Add another list; stays open, Escape closes, spaces add nothing | ✓ (was ◐: fast typing lost names, issue 3; fixed in #44) | clicked, tests |
 | R-LIST-02 Rename in place | List name; empty keeps the old one | ✓ | tests |
 | R-LIST-03 Reorder lists | Move list… (positions from 1, "(current)"), and dragging | ✓ | clicked, tests |
 | R-LIST-04 Card count | Header count, updates on moves and drags | ✓ | clicked |
@@ -152,8 +152,8 @@ Done on 2026-11-13 against `main` after step 28: the real app (API and Vite dev 
 | R-LIST-06 Archive a list | Archive this list…, confirmed; shows under Archived items → Lists | ✓ | clicked |
 | R-LIST-07 Restore to original position | Restore puts it back where it was | ✓ | clicked |
 | R-LIST-08 Delete an archived list | Only from Archived items, after a warning | ✓ | clicked, tests |
-| R-LIST-09 Move a list by touch or keyboard *(step 32)* | Keyboard: the "Move list …" grip in the list header; Space or Enter picks it up, left and right move it, announced. Touch: hold the header 400 ms, then drag sideways; the lanes scroll near their edges | ✓ | tests; check on a real touch device |
-| R-CARD-01 Add cards quickly | + Add a card; stays open; Escape or spaces close it | ◐ fast typing loses titles (issue 3) | clicked |
+| R-LIST-09 Move a list by touch or keyboard *(step 32)* | Keyboard: the "Move list …" grip in the list header; Space or Enter picks it up, left and right move it, announced. Touch: hold the header 400 ms, then drag sideways; the lanes scroll near their edges | ✓ | tests; step 33 (touch pointer events in Chrome); a real phone still to try |
+| R-CARD-01 Add cards quickly | + Add a card; stays open; Escape or spaces close it | ✓ (was ◐: fast typing lost titles, issue 3; fixed in #44, rechecked in step 33) | clicked |
 | R-CARD-02 Card front summary | Labels, done check, due badge, checklist done/total, comment count, description icon, avatars | ✓ | clicked |
 | R-CARD-03 Own address | `#card-<id>` dialog over the board with list, details, description, comments and activity | ✓ (D9) | clicked |
 | R-CARD-04 Title and description | Click to rename; Markdown description with Save and Cancel | ✓ | tests |
@@ -164,7 +164,7 @@ Done on 2026-11-13 against `main` after step 28: the real app (API and Vite dev 
 | R-CARD-09 Restore a card | Logged "sent this card to the board"; back at its old position | ✓ | clicked |
 | R-CARD-10 Delete an archived card | Delete for good…, warns it's permanent | ✓ (D3: the log keeps a note) | tests |
 | R-CARD-11 Assign members | Members picker searches board members; avatars; "joined this card" | ✓ | clicked |
-| R-CARD-12 Move a card by touch *(step 32)* | Hold a card 400 ms (a tap opens it, a swipe scrolls); a copy follows the finger, the drop place shows as for the mouse, scrollers scroll near their edges; let go outside a list and it goes back | ✓ | tests; check on a real touch device |
+| R-CARD-12 Move a card by touch *(step 32)* | Hold a card 400 ms (a tap opens it, a swipe scrolls); a copy follows the finger, the drop place shows as for the mouse, scrollers scroll near their edges; let go outside a list and it goes back | ✓ | tests; step 33 (touch pointer events in Chrome); a real phone still to try |
 | R-CARD-13 Move a card with the keyboard *(step 32)* | Space on a focused card picks it up; up and down within its list, left and right into the neighbouring list; Space or Enter drops (one `PATCH`), Escape puts it back; announced with the list's name | ✓ | tests |
 | R-LABEL-01 Default labels | Six unnamed colours on a new board | ✓ | clicked |
 | R-LABEL-02 Apply labels | Picker with search, in colour order | ✓ | clicked |
@@ -181,19 +181,19 @@ Done on 2026-11-13 against `main` after step 28: the real app (API and Vite dev 
 | R-COMMENT-02 Edit my comment | Edit, Save, "Discard changes", "(edited)" | ✓ | tests |
 | R-COMMENT-03 Delete my comment | After a confirmation | ✓ | tests |
 | R-COMMENT-04 Link to a comment | Copy link → `#card-<id>-comment-<id>`, highlighted | ✓ | tests |
-| R-ACTIVITY-01 Board activity log | Menu → Activity, All or Comments, paged | ◐ old values missing from renames (issue 2) | clicked |
+| R-ACTIVITY-01 Board activity log | Menu → Activity, All or Comments, paged | ✓ (was ◐: old values missing from renames, issue 2; fixed in #43, rechecked in step 33) | clicked |
 | R-ACTIVITY-02 Card activity log | In the dialog, Hide/Show details | ✓ | clicked |
 
-Tally (52 requirements): ✓ 44 · ◐ 5 (issues 1–3) · — 3. With step 31's three new member requirements (55): ✓ 46 · ◐ 5 · — 2 (R-MEMBER-05, R-MEMBER-09) · not built 2 (R-DATE-03, R-CHECK-05, step 32). Both built in step 32: ✓ 48 · ◐ 5 · — 2. With step 32's four `ours` requirements (59), all built: ✓ 52 · ◐ 5 · — 2.
+Tally (52 requirements): ✓ 44 · ◐ 5 (issues 1–3) · — 3. With step 31's three new member requirements (55): ✓ 46 · ◐ 5 · — 2 (R-MEMBER-05, R-MEMBER-09) · not built 2 (R-DATE-03, R-CHECK-05, step 32). Both built in step 32: ✓ 48 · ◐ 5 · — 2. With step 32's four `ours` requirements (59), all built: ✓ 52 · ◐ 5 · — 2. With issues 1–3 fixed (#42–#44, rechecked in step 33): **✓ 57 · — 2**.
 
 ### Issues found
 
 Each is fixed in its own PR.
 
-1. **Creating a board isn't logged** (R-BOARD-02). `POST /boards` publishes no event, so a new board's log says "Nothing has happened yet." Fix: publish `board.created`.
-2. **Changes don't say what they changed from, when the log can't see the earlier state** (R-BOARD-03, R-ACTIVITY-01). Update events carry only the new state, so the log compares each with the previous entry about the same thing. A board has no earlier entry at all (issue 1), default labels have none, and anything whose earlier entry is on an older page shows as "changed the board" or "updated “…”" until "Show older" is clicked. Fix: update events also carry the old values of what changed.
-3. **Typing quickly in "Add a card" or "Add a list" loses titles** (R-CARD-01, R-LIST-01). While a card is being saved, Enter is ignored (the button is disabled) and the field is then cleared, so a title typed meanwhile is lost. Seen by typing three titles in a row: only the first was added. Fix: clear the field at once and save the titles one after another.
-4. **"1 cards", "1 comments"** in the hover text of the list count and the card front's comment badge. Fix: singular for one.
+1. **Creating a board isn't logged** (R-BOARD-02). `POST /boards` publishes no event, so a new board's log says "Nothing has happened yet." Fix: publish `board.created`. **Fixed** in #42; rechecked in step 33 (the log starts with "created the board").
+2. **Changes don't say what they changed from, when the log can't see the earlier state** (R-BOARD-03, R-ACTIVITY-01). Update events carry only the new state, so the log compares each with the previous entry about the same thing. A board has no earlier entry at all (issue 1), default labels have none, and anything whose earlier entry is on an older page shows as "changed the board" or "updated “…”" until "Show older" is clicked. Fix: update events also carry the old values of what changed. **Fixed** in #43; rechecked in step 33 ("renamed the board from “Step 33 check” to “Launch plan”").
+3. **Typing quickly in "Add a card" or "Add a list" loses titles** (R-CARD-01, R-LIST-01). While a card is being saved, Enter is ignored (the button is disabled) and the field is then cleared, so a title typed meanwhile is lost. Seen by typing three titles in a row: only the first was added. Fix: clear the field at once and save the titles one after another. **Fixed** in #44; rechecked in step 33 (three titles typed fast all arrived, in order).
+4. **"1 cards", "1 comments"** in the hover text of the list count and the card front's comment badge. Fix: singular for one. **Fixed** in #45; rechecked in step 33 ("1 card").
 
 ## Two people at once (step 30)
 
@@ -204,10 +204,10 @@ Done on 2026-11-13: the owner and an editor signed in to the same board in two C
 | 1. A burst of moves | 16 card moves sent at once, half by each user, to random lists and positions | ✓ all 200; the editor's screen, live throughout, matched the server card for card, counts included |
 | 2. Drag against a move | The editor drags a card to Done while the owner moves the same card to QA; then the editor drags a list while the owner moves another | ✓ both screens matched the server; no error shown |
 | 3. A card open while someone else changes it | The owner has a card open; the editor renames it, marks it done, comments, adds a checklist, archives it | ✓ every change showed in the open dialog at once, then the archived banner and read-only controls |
-| 4. …and deletes it | The editor deletes the archived card | ◐ the owner's dialog still shows it as archived (issue 5) |
+| 4. …and deletes it | The editor deletes the archived card | ✓ (was ◐: the owner's dialog still showed it as archived, issue 5; fixed in #47, rechecked in step 33) |
 | 5. Closing and reopening | The owner closes the board, then reopens it | ✓ the editor's edit controls went and came back, live |
 | 6. Removing a member | The owner removes the editor | ✓ the editor's page said at once that the board is no longer available |
-| 7. Changing a role | The owner makes the editor a viewer | ◐ the viewer's edit controls stay until an edit is refused (issue 6) |
+| 7. Changing a role | The owner makes the editor a viewer | ✓ (was ◐: the viewer's edit controls stayed until an edit was refused, issue 6; fixed in #48, rechecked in step 33) |
 
 Drags were made with real `DragEvent`s in the page (see step 29), and the owner's side with the API from the page, so both sides' requests went out within milliseconds of each other.
 
@@ -215,8 +215,36 @@ Drags were made with real `DragEvent`s in the page (see step 29), and the owner'
 
 Each is fixed in its own PR.
 
-5. **A card deleted by someone else stays open as archived.** An open archived card is read from the API, not the board, so the `card.deleted` event doesn't reach it; Restore and Delete then fail with 404. Fix: the dialog says "Card not found" when its card is deleted.
-6. **A role change doesn't reach the person whose role changed.** `member.updated` updates the members list but not the board's `role` for the person it's about, so a new viewer keeps the edit controls until an edit gets a 403. Fix: apply the new role to the board when the event is about you.
+5. **A card deleted by someone else stays open as archived.** An open archived card is read from the API, not the board, so the `card.deleted` event doesn't reach it; Restore and Delete then fail with 404. Fix: the dialog says "Card not found" when its card is deleted. **Fixed** in #47; rechecked in step 33.
+6. **A role change doesn't reach the person whose role changed.** `member.updated` updates the members list but not the board's `role` for the person it's about, so a new viewer keeps the edit controls until an edit gets a 403. Fix: apply the new role to the board when the event is about you. **Fixed** in #48; rechecked in step 33.
+
+## Frontend recheck (step 33)
+
+Done on 2026-11-16 against `main` after step 32: the real app (API and Vite dev server) with a seeded board and three local test users (owner, editor, viewer), in Chrome. Two things were checked: that issues 1–6 from steps 29 and 30 are fixed, and step 32's work, which the tests could only check in jsdom (no layout, no real keys, no touch). As in step 30, the other person's side was played with the API from the page. Touch was checked by sending touch-type `PointerEvent`s in the page: real layout, a real `elementFromPoint` and real scrolling, but not a real finger, so how it feels on a phone is still to try.
+
+| What | How | Result |
+| --- | --- | --- |
+| Issue 1: creating a board is logged | Menu → Activity on a new board | ✓ "You created the board" |
+| Issue 2: renames say what they changed from | Renamed the board | ✓ "renamed the board from “Step 33 check” to “Launch plan”" |
+| Issue 3: fast typing in "Add a card" | Three titles, each followed by Enter, with no pause | ✓ all three, in order |
+| Issue 4: singular counts | The list count's hover text | ✓ "1 card", "3 cards" |
+| Issue 5: a card deleted by someone else | The owner has an archived card open; the editor deletes it | ✓ "Card not found" at once |
+| Issue 6: a role change reaches that person | The editor's screen open; the owner makes them a viewer | ✓ the edit controls went within a second |
+| R-CARD-13: move a card with the keyboard | Real keys: Space, ↓, →, Space | ✓ focus followed the card into the next list; each step announced; one save, matching the server |
+| R-LIST-09: move a list with the keyboard | The "Move list" grip: Enter, ← ←, Enter | ✓ "Dropped Done at position 1 of 3." |
+| Cancel by leaving | Picked up a card, moved it, clicked the board | ✓ "Cancelled. Venue is back at position 1 of 2 in To do."; nothing saved |
+| R-CARD-12: move a card by touch | Held a card 450 ms, carried it to another list, let go | ✓ the copy followed, the drop place showed, the server has the new order |
+| R-LIST-09: move a list by touch, edge scrolling | Eight lists; held a header, then the finger at the lanes' right edge | ✓ the lanes scrolled (588 px in 0.7 s); the list landed at the end |
+| R-CHECK-06: move an item by touch | Held "Publish", let go above "Review" | ✓ on screen and on the server |
+| R-DATE-03: start date | Dates → Start date ticked → Save | ✓ "Nov 16 – Nov 17, 11:19 AM" in the dialog and on the card; logged |
+| R-CHECK-05: item assignee and due date | Item options: the editor, a due date yesterday | ✓ red "Nov 15" and the avatar on the row; the card front "0/2 • Nov 15"; not logged, as the requirement says |
+| R-CHECK-01: add a checklist, then items | Add → title → Enter → type the first item at once | ✓ (was ◐: the first item was lost, issue 7; fixed in #59 and rechecked in Chrome) |
+
+### Issues found
+
+Fixed in its own PR.
+
+7. **The first item typed straight after adding a checklist is lost** (R-CHECK-01). After Enter in the new checklist's title field, focus goes back to the "Add a checklist" button while the checklist is saved, and only then moves to its "Add an item" field. Keys typed in that gap land on the button. Locally the gap was about 25 ms (the focus log: Enter, then "Lost" typed on the button, then focus on "Add an item"); against a real server it lasts a round trip, so a fast typist loses the first item. The same kind of problem as issue 3. Fix: keep focus in the form until the item field exists (or open the item field at once and queue what's typed, as `useQueue()` does). **Fixed** in #59: the new checklist shows at once, pending, with its item field focused, and items typed meanwhile wait for it.
 
 ## After the build order
 
@@ -233,6 +261,7 @@ Added on 2026-11-13, once step 28 was merged. Each is its own branch and PR.
    - **Reorder checklists and items** (R-CHECK-06), by mouse and keyboard: drag items within their checklist and checklists within the card, with `useReorder` introduced here.
    - **Keyboard moves for cards and lists** (R-CARD-13, R-LIST-09's keyboard part), reusing `useReorder`; left and right move a card into the neighbouring list. Built: the board is two-dimensional, so it has its own pure helpers (`boardKeys.ts`) with `useReorder`'s keys and `announce()` words, rather than the hook itself; Enter on a card that isn't picked up still opens it.
    - **Touch dragging** (R-CARD-12, R-LIST-09's touch part, and R-CHECK-06 by touch): pointer events with a 400 ms hold, edge scrolling, and tests with stubbed `PointerEvent`s, as the drag tests stub `DragEvent`. Built: one hook, `useTouchDrag()`, for all four kinds of item. It feeds the same drag state as the mouse, so the drop indicators and the saves are shared, and it carries a copy of the item (the original fades, as in a mouse drag) rather than moving the item itself, so scrollers can't clip it. jsdom has no layout, so the tests say what is under the finger; how it feels needs a real phone.
+5. **Step 33: recheck the frontend.** Done on 2026-11-16 ("Frontend recheck (step 33)" above): issues 1–6 confirmed fixed and the Coverage tables brought up to date (✓ 57 · — 2), step 32's work checked in a real browser, and one new issue (7) found, fixed in #59. Still to do by hand: touch dragging on a real phone.
 
 ## Risks and open questions
 
