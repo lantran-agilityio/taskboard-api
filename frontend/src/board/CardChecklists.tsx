@@ -32,9 +32,22 @@ import type { BoardEvent, Member } from "./model";
 import { fullIndex, moveTo } from "./reorder";
 import { useDragSort, useReorder } from "./useReorder";
 
+/**
+ * The id a checklist has while it's being added: it's shown at once, with its
+ * "Add an item" field, so nothing typed while it saves is lost (issue 7).
+ */
+export const PENDING = -1;
+
 export interface ChecklistsHandle {
   /** null while loading. */
   checklists: Checklist[] | null;
+  /** The title of a checklist being added, until the API answers. */
+  pendingTitle: string | null;
+  /**
+   * The React key for a checklist's block. The one just added keeps the key
+   * it had while pending, so its block (and the item being typed) stays.
+   */
+  keyOf: (id: number) => number;
   failed: boolean;
   /** The checklist whose "Add an item" form is open. */
   addingTo: number | null;
@@ -72,6 +85,13 @@ export function useChecklists(
   const [checklists, setChecklists] = useState<Checklist[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [addingTo, setAddingTo] = useState<number | null>(null);
+  const [pendingTitle, setPendingTitle] = useState<string | null>(null);
+  const [lastAdded, setLastAdded] = useState<number | null>(null);
+  // The checklist being added, for items typed before it exists.
+  const creating = useRef<Promise<Checklist | null> | null>(null);
+  // Checklists created (by anyone) while ours is pending: held until ours is
+  // in, so the new one isn't shown twice (once pending, once from its event).
+  const held = useRef<BoardEvent[] | null>(null);
   // Bumped to read the checklists again.
   const [reads, setReads] = useState(0);
   const reread = () => setReads((count) => count + 1);
@@ -110,6 +130,10 @@ export function useChecklists(
           return;
         }
         if (!isChecklistEvent(event) || event.data?.card_id !== cardId) return;
+        if (held.current && event.type === "checklist.created") {
+          held.current.push(event);
+          return;
+        }
         during.current?.push(event);
         const missing =
           event.type.startsWith("checklist_item.") &&
@@ -128,16 +152,36 @@ export function useChecklists(
   return {
     checklists,
     failed,
+    pendingTitle,
+    keyOf: (id) => (id === lastAdded ? PENDING : id),
     addingTo,
     setAddingTo,
     async add(title) {
-      const made = await attempt("add the checklist", () =>
+      // Shown at once with its item field focused: people go straight on to
+      // its first item, and keys typed while it saves must land somewhere.
+      setPendingTitle(title);
+      setAddingTo(PENDING);
+      // The last one added gives up the pending key (keys must be unique).
+      setLastAdded(null);
+      held.current = [];
+      const creation = attempt("add the checklist", () =>
         api.createChecklist(token, cardId, title),
       );
-      if (!made) return reread();
-      apply((current) => putChecklist(current, made));
-      // Straight on to its first item, as people add items one after another.
-      setAddingTo(made.id);
+      creating.current = creation;
+      const made = await creation;
+      const missed = held.current ?? [];
+      held.current = null;
+      setPendingTitle(null);
+      if (!made) {
+        setAddingTo((open) => (open === PENDING ? null : open));
+        // Events held meanwhile are in the API's answer.
+        return reread();
+      }
+      setLastAdded(made.id);
+      apply((current) =>
+        missed.reduce(applyChecklistEvent, putChecklist(current, made)),
+      );
+      setAddingTo((open) => (open === PENDING ? made.id : open));
     },
     rename(checklist, title) {
       void attempt("rename the checklist", () =>
@@ -157,8 +201,11 @@ export function useChecklists(
       });
     },
     async addItem(checklist, text) {
+      // Typed while its checklist was still being added: wait for it.
+      const target = checklist.id === PENDING ? await creating.current : checklist;
+      if (!target) return;
       const made = await attempt("add the item", () =>
-        api.createItem(token, checklist.id, text),
+        api.createItem(token, target.id, text),
       );
       if (made) apply((current) => putItem(current, made));
       else reread();
@@ -253,7 +300,22 @@ export function Checklists({
   members: Member[];
 }) {
   const [confirm, setConfirm] = useState<Checklist | null>(null);
-  const lists = handle.checklists ?? [];
+  const saved = handle.checklists ?? [];
+  // The one being added goes at the end, where the API will put it.
+  const lists: Checklist[] =
+    handle.pendingTitle === null
+      ? saved
+      : [
+          ...saved,
+          {
+            id: PENDING,
+            card_id: 0,
+            title: handle.pendingTitle,
+            position: saved.length,
+            created_at: "",
+            items: [],
+          },
+        ];
   const byId = (id: number) => lists.find((checklist) => checklist.id === id)!;
   const keys = useReorder({
     ids: lists.map((checklist) => checklist.id),
@@ -271,14 +333,14 @@ export function Checklists({
       <div className="checklists" {...(editable ? drag.containerProps : {})}>
         {keys.order.map((id) => (
           <ChecklistBlock
-            key={id}
+            key={handle.keyOf(id)}
             checklist={byId(id)}
             handle={handle}
             editable={editable}
             members={members}
             onDelete={() => setConfirm(byId(id))}
             sort={
-              editable
+              editable && id !== PENDING
                 ? {
                     drag: drag.itemProps(id),
                     grip: keys.handleProps(id),
@@ -349,6 +411,8 @@ function ChecklistBlock({
   sort?: Sortable;
 }) {
   const [hidden, setHidden] = useState(() => readHidden(checklist.id));
+  // Being added: it can take items, but can't be renamed, moved or deleted yet.
+  const pending = checklist.id === PENDING;
   const [options, setOptions] = useState<{
     item: ChecklistItem;
     anchor: HTMLElement;
@@ -408,7 +472,7 @@ function ChecklistBlock({
             label="Checklist title"
             className="checklist-title"
             inputClassName="title-input checklist-input"
-            editable={editable}
+            editable={editable && !pending}
             onSave={(title) => handle.rename(checklist, title)}
           />
         </h3>
@@ -417,7 +481,7 @@ function ChecklistBlock({
             {hiding ? `Show ticked items (${done})` : "Hide ticked items"}
           </button>
         )}
-        {editable && (
+        {editable && !pending && (
           <button type="button" className="btn sm" onClick={onDelete}>
             Delete
           </button>

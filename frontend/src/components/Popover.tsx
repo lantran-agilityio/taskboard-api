@@ -12,7 +12,7 @@ import { useEscape } from "./escape";
 /**
  * A small panel under the button that opened it (a list's menu). Escape, the
  * × button and a click outside close it; focus starts on its first button
- * and goes back to the opener.
+ * and goes back to the opener (unless something else has taken it).
  */
 export function Popover({
   title,
@@ -42,7 +42,8 @@ export function Popover({
   }, [anchor]);
 
   useEffect(() => {
-    panel.current?.querySelector<HTMLElement>("button:not(.x), select, input")?.focus();
+    const box = panel.current;
+    box?.querySelector<HTMLElement>("button:not(.x), select, input")?.focus();
     function onDown(event: MouseEvent) {
       const target = event.target as Node;
       if (!panel.current?.contains(target) && !anchor?.contains(target)) onClose();
@@ -50,7 +51,11 @@ export function Popover({
     document.addEventListener("mousedown", onDown);
     return () => {
       document.removeEventListener("mousedown", onDown);
-      if (anchor?.isConnected) anchor.focus();
+      // Back to the opener, unless closing it put focus somewhere else on
+      // purpose (adding a checklist focuses its new "Add an item" field).
+      const now = document.activeElement;
+      const lost = !now || now === document.body || (box?.contains(now) ?? false);
+      if (lost && anchor?.isConnected) anchor.focus();
     };
     // Set up once per popover; onClose is read when it fires.
     // eslint-disable-next-line react-hooks/exhaustive-deps

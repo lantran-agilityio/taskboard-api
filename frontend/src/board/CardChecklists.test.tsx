@@ -254,6 +254,77 @@ describe("changing checklists", () => {
     expect(added.queryByRole("textbox", { name: "New item" })).not.toBeInTheDocument();
   });
 
+  it("keeps what's typed while the new checklist is still saving", async () => {
+    const made: Checklist = {
+      ...SHOTS,
+      id: 8,
+      title: "Checklist",
+      position: 1,
+      items: [],
+    };
+    let release = () => {};
+    const saving = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { calls } = serve({
+      "POST /cards/100/checklists": async () => {
+        await saving;
+        return { status: 201, body: made };
+      },
+      "POST /checklists/8/items": ({ body }) => ({
+        status: 201,
+        body: { ...item(80, JSON.parse(body ?? "{}").text), checklist_id: 8 },
+      }),
+    });
+    const user = await open();
+    await shots();
+
+    await user.click(dialog().getByRole("button", { name: "Add a checklist" }));
+    await user.keyboard("{Enter}");
+    // Shown at once, its item field focused, though the API hasn't answered.
+    const added = within(screen.getByRole("region", { name: "Checklist" }));
+    const field = added.getByRole("textbox", { name: "New item" });
+    expect(field).toHaveFocus();
+    expect(added.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
+    await user.keyboard("First{Enter}Sec");
+    expect(bodiesOf(calls, "POST /checklists/8/items")).toEqual([]);
+
+    await act(async () => release());
+
+    expect(await added.findByText("First")).toBeInTheDocument();
+    expect(bodiesOf(calls, "POST /checklists/8/items")).toEqual([{ text: "First" }]);
+    // The same field, still focused, with the next item half typed.
+    expect(field).toBeInTheDocument();
+    expect(field).toHaveFocus();
+    expect(field).toHaveValue("Sec");
+    expect(screen.getAllByRole("region", { name: "Checklist" })).toHaveLength(1);
+    expect(added.getByRole("button", { name: "Delete" })).toBeInTheDocument();
+  });
+
+  it("takes the new checklist away if the API refuses it", async () => {
+    const { calls } = serve({
+      "POST /cards/100/checklists": {
+        status: 422,
+        body: { detail: [{ loc: ["body", "title"], msg: "Card is archived" }] },
+      },
+    });
+    const user = await open();
+    await shots();
+
+    await user.click(dialog().getByRole("button", { name: "Add a checklist" }));
+    await user.keyboard("{Enter}First{Enter}");
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("region", { name: "Checklist" }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(calls.some((call) => call.key.startsWith("POST /checklists/"))).toBe(false);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Couldn't add the checklist: Card is archived",
+    );
+  });
+
   it("names a new checklist", async () => {
     const { calls } = serve({
       "POST /cards/100/checklists": ({ body }) => ({
