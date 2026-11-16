@@ -58,11 +58,13 @@ export function announce(
   name: string,
   index: number,
   total: number,
+  /** Names the sequence when there are several (a card's list). */
+  where?: string,
 ): string {
-  const at = `position ${index + 1} of ${total}`;
+  const at = `position ${index + 1} of ${total}${where ? ` in ${where}` : ""}`;
   switch (step) {
     case "pick":
-      return `Picked up ${name}, ${at}. Use the up and down arrows to move it, Space to drop it, Escape to cancel.`;
+      return `Picked up ${name}, ${at}. Use the arrow keys to move it, Space to drop it, Escape to cancel.`;
     case "move":
       return `${name}, ${at}.`;
     case "drop":

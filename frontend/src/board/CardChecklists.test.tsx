@@ -397,13 +397,11 @@ describe("changing checklists", () => {
     shots_.getByRole("button", { name: "Move Team photo" }).focus();
     await user.keyboard(" ");
     expect(
-      screen.getByText(/Picked up the item “Team photo”, position 3 of 3/),
+      screen.getByText(/Picked up Team photo, position 3 of 3/),
     ).toBeInTheDocument();
     await user.keyboard("{ArrowUp}{ArrowUp}");
     expect(texts(shots_)).toEqual(["Team photo", "Window display", "Close-up"]);
-    expect(
-      screen.getByText("the item “Team photo”, position 1 of 3."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Team photo, position 1 of 3.")).toBeInTheDocument();
     expect(bodiesOf(calls, "PATCH /checklist-items/72")).toEqual([]);
     // Focus follows the item as it moves.
     expect(shots_.getByRole("button", { name: "Move Team photo" })).toHaveFocus();
@@ -411,7 +409,7 @@ describe("changing checklists", () => {
     await user.keyboard(" ");
     expect(bodiesOf(calls, "PATCH /checklist-items/72")).toEqual([{ position: 0 }]);
     expect(
-      screen.getByText("Dropped the item “Team photo” at position 1 of 3."),
+      screen.getByText("Dropped Team photo at position 1 of 3."),
     ).toBeInTheDocument();
   });
 
@@ -427,8 +425,24 @@ describe("changing checklists", () => {
     expect(calls.some((call) => call.key.startsWith("PATCH"))).toBe(false);
     expect(screen.getByRole("dialog", { name: "Brief" })).toBeInTheDocument();
     expect(
-      screen.getByText(/Cancelled\. the item “Window display” is back at position 1/),
+      screen.getByText(/Cancelled\. Window display is back at position 1/),
     ).toBeInTheDocument();
+  });
+
+  it("puts an item back when focus leaves it", async () => {
+    const { calls } = serve();
+    const user = await open();
+    const shots_ = await shots();
+
+    shots_.getByRole("button", { name: "Move Window display" }).focus();
+    await user.keyboard(" {ArrowDown}");
+    expect(texts(shots_)).toEqual(["Close-up", "Window display", "Team photo"]);
+    await user.tab();
+
+    await waitFor(() =>
+      expect(texts(shots_)).toEqual(["Window display", "Close-up", "Team photo"]),
+    );
+    expect(calls.some((call) => call.key.startsWith("PATCH"))).toBe(false);
   });
 
   it("drags an item to the top of its checklist", async () => {

@@ -152,7 +152,7 @@ Done on 2026-11-13 against `main` after step 28: the real app (API and Vite dev 
 | R-LIST-06 Archive a list | Archive this list…, confirmed; shows under Archived items → Lists | ✓ | clicked |
 | R-LIST-07 Restore to original position | Restore puts it back where it was | ✓ | clicked |
 | R-LIST-08 Delete an archived list | Only from Archived items, after a warning | ✓ | clicked, tests |
-| R-LIST-09 Move a list by touch or keyboard *(step 32)* | — | not built yet | — |
+| R-LIST-09 Move a list by touch or keyboard *(step 32)* | Keyboard: the "Move list …" grip in the list header; Space or Enter picks it up, left and right move it, announced | ◐ keyboard built; touch comes with the touch PR | tests |
 | R-CARD-01 Add cards quickly | + Add a card; stays open; Escape or spaces close it | ◐ fast typing loses titles (issue 3) | clicked |
 | R-CARD-02 Card front summary | Labels, done check, due badge, checklist done/total, comment count, description icon, avatars | ✓ | clicked |
 | R-CARD-03 Own address | `#card-<id>` dialog over the board with list, details, description, comments and activity | ✓ (D9) | clicked |
@@ -165,7 +165,7 @@ Done on 2026-11-13 against `main` after step 28: the real app (API and Vite dev 
 | R-CARD-10 Delete an archived card | Delete for good…, warns it's permanent | ✓ (D3: the log keeps a note) | tests |
 | R-CARD-11 Assign members | Members picker searches board members; avatars; "joined this card" | ✓ | clicked |
 | R-CARD-12 Move a card by touch *(step 32)* | — | not built yet | — |
-| R-CARD-13 Move a card with the keyboard *(step 32)* | — | not built yet | — |
+| R-CARD-13 Move a card with the keyboard *(step 32)* | Space on a focused card picks it up; up and down within its list, left and right into the neighbouring list; Space or Enter drops (one `PATCH`), Escape puts it back; announced with the list's name | ✓ | tests |
 | R-LABEL-01 Default labels | Six unnamed colours on a new board | ✓ | clicked |
 | R-LABEL-02 Apply labels | Picker with search, in colour order | ✓ | clicked |
 | R-LABEL-03 Create a label | From the picker or Menu → Labels; applied to the card at once | ✓ | tests |
@@ -231,7 +231,7 @@ Added on 2026-11-13, once step 28 was merged. Each is its own branch and PR.
 
    Then the requirements step 32 added (`ours` in `requirements.md`), all frontend only (D13), each its own branch and PR:
    - **Reorder checklists and items** (R-CHECK-06), by mouse and keyboard: drag items within their checklist and checklists within the card, with `useReorder` introduced here.
-   - **Keyboard moves for cards and lists** (R-CARD-13, R-LIST-09's keyboard part), reusing `useReorder`; left and right move a card into the neighbouring list.
+   - **Keyboard moves for cards and lists** (R-CARD-13, R-LIST-09's keyboard part), reusing `useReorder`; left and right move a card into the neighbouring list. Built: the board is two-dimensional, so it has its own pure helpers (`boardKeys.ts`) with `useReorder`'s keys and `announce()` words, rather than the hook itself; Enter on a card that isn't picked up still opens it.
    - **Touch dragging** (R-CARD-12, R-LIST-09's touch part, and R-CHECK-06 by touch): pointer events with a 400 ms hold, edge scrolling, and tests with stubbed `PointerEvent`s, as the drag tests stub `DragEvent`.
 
 ## Risks and open questions

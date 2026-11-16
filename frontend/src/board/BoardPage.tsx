@@ -1,14 +1,23 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 import * as edit from "../api/boardEdit";
 import { reopenBoard, setStarred } from "../api/boards";
 import { StarIcon } from "../components/icons";
 import { InlineEdit } from "../components/InlineEdit";
-import { Avatar, type CardActions } from "./CardFront";
+import { Avatar, CARD_MOVE_HINT, type CardActions } from "./CardFront";
 import { useSession } from "../auth/session";
 import { BoardMenu } from "./BoardMenu";
 import { CardDialog } from "./CardDialog";
 import { ShareDialog } from "./ShareDialog";
+import {
+  isMoved,
+  pickCard,
+  pickList,
+  preview,
+  step,
+  words,
+  type BoardHeld,
+} from "./boardKeys";
 import { dropIndex, isNoMove, type Span } from "./dnd";
 import * as local from "./edits";
 import { AddListColumn, ListColumn, type Drag, type ListActions } from "./ListColumn";
@@ -48,6 +57,48 @@ export function BoardPage({
   const { session } = useSession();
   const myId = session.status === "signedIn" ? session.user.id : 0;
   const lanes = useRef<HTMLDivElement>(null);
+  // A card or list picked up with the keyboard (R-CARD-13, R-LIST-09), what
+  // was last announced, and what should have focus (it moves between lists).
+  const [held, setHeld] = useState<BoardHeld | null>(null);
+  const [announcement, setAnnouncement] = useState("");
+  const [focus, setFocus] = useState<{ kind: "card" | "list"; id: number } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (focus) handleOf(focus)?.focus();
+  }, [focus, held]);
+
+  // The latest held item and board, for the blur check a tick later.
+  const latest = useRef({ held, view });
+  useEffect(() => {
+    latest.current = { held, view };
+  });
+
+  /** The element a card or list is moved from: the card's link, the list's grip. */
+  function handleOf(item: { kind: "card" | "list"; id: number }): HTMLElement | null {
+    const selector =
+      item.kind === "card"
+        ? `[data-card="${item.id}"] .card-link`
+        : `[data-list="${item.id}"] .grip`;
+    return lanes.current?.querySelector<HTMLElement>(selector) ?? null;
+  }
+
+  /**
+   * Leaving the held card or list (a click elsewhere, Tab) cancels the move.
+   * Checked a tick later, because moving it into another list blurs it for a
+   * moment before the effect above focuses it again.
+   */
+  function onLanesBlur() {
+    setTimeout(() => {
+      const { held, view } = latest.current;
+      if (!held || view.status !== "ready") return;
+      if (handleOf(held) === document.activeElement) return;
+      setHeld(null);
+      setFocus(null);
+      setAnnouncement(words(view.data.lists, held, "cancel"));
+    });
+  }
 
   const cardIds =
     view.status === "ready"
@@ -83,7 +134,10 @@ export function BoardPage({
     return <Message title="Couldn't load the board">{view.message}</Message>;
   }
 
-  const { board, lists, labels, members } = view.data;
+  // While something is held, the board shows where it would land.
+  const { board, lists, labels, members } = held ? preview(view.data, held) : view.data;
+  // Moves are worked out on the board as it really is.
+  const realLists = view.data.lists;
   // Viewers only read, and a closed board is read-only for everyone (R-BOARD-06).
   const canEdit = board.role !== "viewer" && !board.closed_at;
   const canRename = board.role === "owner" && !board.closed_at;
@@ -149,6 +203,7 @@ export function BoardPage({
       setDrag(null);
       setListDropAt(null);
     },
+    onKey: (card, event) => onMoveKey(event, () => pickCard(realLists, card.id)),
   };
 
   const listActions: ListActions = {
@@ -180,7 +235,59 @@ export function BoardPage({
     },
     onListDragStart: (list) =>
       setDrag({ kind: "list", id: list.id, fromIndex: lists.indexOf(list) }),
+    onListKey: (list, event) => onMoveKey(event, () => pickList(realLists, list.id)),
   };
+
+  /**
+   * The keyboard pick-up mode (D13): Space picks the focused card or list up,
+   * the arrow keys move it (on screen only), Space or Enter drops it, with one
+   * request, and Escape or leaving it puts it back. Enter on a card that isn't held still
+   * opens it.
+   */
+  function onMoveKey(event: KeyboardEvent<HTMLElement>, pick: () => BoardHeld | null) {
+    const here = pick();
+    if (!here) return;
+    const mine = held && held.kind === here.kind && held.id === here.id;
+    const key = event.key;
+    if (!held) {
+      // A list's grip is a button, so Enter works too; a card's link opens on Enter.
+      if (key === " " || (key === "Enter" && here.kind === "list")) {
+        event.preventDefault();
+        setHeld(here);
+        setFocus({ kind: here.kind, id: here.id });
+        setAnnouncement(words(realLists, here, "pick"));
+      }
+      return;
+    }
+    if (!mine) return;
+    if (key === " " || key === "Enter") {
+      event.preventDefault();
+      setHeld(null);
+      setAnnouncement(words(realLists, held, "drop"));
+      if (isMoved(held)) dropHeld(held);
+    } else if (key === "Escape") {
+      event.preventDefault();
+      setHeld(null);
+      setAnnouncement(words(realLists, held, "cancel"));
+    } else if (key.startsWith("Arrow")) {
+      event.preventDefault();
+      const next = step(realLists, held, key);
+      setHeld(next);
+      setAnnouncement(words(realLists, next, "move"));
+    }
+  }
+
+  function dropHeld(at: BoardHeld) {
+    if (at.kind === "list") {
+      moveList(at.id, at.index);
+      return;
+    }
+    void change(
+      "move the card",
+      (data) => local.moveCard(data, at.id, at.list, at.index),
+      () => edit.updateCard(token, at.id, { list_id: at.list, position: at.index }),
+    );
+  }
 
   function moveList(listId: number, position: number) {
     void change(
@@ -303,6 +410,7 @@ export function BoardPage({
       )}
       <div
         ref={lanes}
+        onBlur={held ? onLanesBlur : undefined}
         className={
           listDrag && listDropAt !== null && listDropAt >= otherLists.length
             ? "lanes gutter drop-end"
@@ -341,6 +449,7 @@ export function BoardPage({
             }
             addingCard={addingCardTo === list.id}
             onAddingCard={(open) => setAddingCardTo(open ? list.id : null)}
+            held={held}
           />
         ))}
         {canEdit && (
@@ -357,6 +466,14 @@ export function BoardPage({
           />
         )}
       </div>
+      {canEdit && (
+        <p id={CARD_MOVE_HINT} hidden>
+          Press Space to move this card with the arrow keys.
+        </p>
+      )}
+      <p className="sr-only" aria-live="polite">
+        {announcement}
+      </p>
       {menuOpen && (
         <BoardMenu
           data={view.data}

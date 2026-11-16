@@ -592,6 +592,119 @@ describe("dragging", () => {
   });
 });
 
+describe("moving with the keyboard", () => {
+  function cardLink(listName: string, title: string) {
+    return lane(listName).getByRole("link", { name: title });
+  }
+
+  function announced() {
+    return document.querySelector(".sr-only[aria-live]")!.textContent;
+  }
+
+  it("moves a card down, into the next list, and drops it with one request", async () => {
+    const { calls } = serve({
+      "PATCH /cards/100": { status: 200, body: card(100, 2) },
+    });
+    const user = await openBoard();
+    cardLink("To do", "Brief").focus();
+
+    await user.keyboard(" ");
+    expect(announced()).toMatch(/^Picked up Brief, position 1 of 2 in To do\./);
+    await user.keyboard("{ArrowDown}");
+    expect(titles("To do")).toEqual(["Venue", "Brief"]);
+    await user.keyboard("{ArrowRight}");
+    expect(titles("To do")).toEqual(["Venue"]);
+    expect(titles("Doing")).toEqual(["Budget", "Brief"]);
+    expect(announced()).toBe("Brief, position 2 of 2 in Doing.");
+    // Focus follows the card into the other list.
+    expect(cardLink("Doing", "Brief")).toHaveFocus();
+    expect(calls.map((call) => call.key)).not.toContain("PATCH /cards/100");
+
+    await user.keyboard(" ");
+    expect(announced()).toBe("Dropped Brief at position 2 of 2 in Doing.");
+    expect(bodiesOf(calls, "PATCH /cards/100")).toEqual([{ list_id: 2, position: 1 }]);
+    expect(cardLink("Doing", "Brief")).toHaveFocus();
+  });
+
+  it("puts a card back with Escape, with no request", async () => {
+    const { calls } = serve();
+    const user = await openBoard();
+    cardLink("To do", "Brief").focus();
+
+    await user.keyboard(" {ArrowRight}{Escape}");
+
+    expect(titles("To do")).toEqual(["Brief", "Venue"]);
+    expect(titles("Doing")).toEqual(["Budget"]);
+    expect(announced()).toBe("Cancelled. Brief is back at position 1 of 2 in To do.");
+    expect(calls.map((call) => call.key)).not.toContain("PATCH /cards/100");
+  });
+
+  it("puts a card back when focus leaves it, with no request", async () => {
+    const { calls } = serve();
+    const user = await openBoard();
+    cardLink("To do", "Brief").focus();
+
+    await user.keyboard(" {ArrowRight}");
+    expect(titles("Doing")).toEqual(["Brief", "Budget"]);
+    await user.tab();
+
+    await waitFor(() => expect(titles("To do")).toEqual(["Brief", "Venue"]));
+    expect(titles("Doing")).toEqual(["Budget"]);
+    expect(announced()).toBe("Cancelled. Brief is back at position 1 of 2 in To do.");
+    expect(calls.map((call) => call.key)).not.toContain("PATCH /cards/100");
+  });
+
+  it("puts a list back when something else is clicked", async () => {
+    const { calls } = serve();
+    const user = await openBoard();
+    screen.getByRole("button", { name: "Move list To do" }).focus();
+
+    await user.keyboard("{Enter}{ArrowRight}");
+    expect(laneNames()).toEqual(["Doing", "To do", "Done"]);
+    await user.click(screen.getByRole("button", { name: "Move list Done" }));
+
+    await waitFor(() => expect(laneNames()).toEqual(["To do", "Doing", "Done"]));
+    expect(calls.map((call) => call.key)).not.toContain("PATCH /lists/1");
+  });
+
+  it("still opens a card with Enter when it isn't picked up", async () => {
+    serve({
+      "GET /cards/100/comments": { status: 200, body: { items: [], next: null } },
+    });
+    const user = await openBoard();
+    cardLink("To do", "Brief").focus();
+
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(window.location.hash).toBe("#card-100"));
+  });
+
+  it("moves a list from its grip", async () => {
+    const { calls } = serve({
+      "PATCH /lists/1": { status: 200, body: list(1, "To do") },
+    });
+    const user = await openBoard();
+    screen.getByRole("button", { name: "Move list To do" }).focus();
+
+    await user.keyboard("{Enter}{ArrowRight}{ArrowRight}");
+    expect(laneNames()).toEqual(["Doing", "Done", "To do"]);
+    expect(screen.getByRole("button", { name: "Move list To do" })).toHaveFocus();
+    await user.keyboard("{Enter}");
+
+    expect(announced()).toBe("Dropped To do at position 3 of 3.");
+    expect(bodiesOf(calls, "PATCH /lists/1")).toEqual([{ position: 2 }]);
+  });
+
+  it("offers no grips to a viewer", async () => {
+    serve({}, { role: "viewer" });
+    await openBoard();
+
+    expect(
+      screen.queryByRole("button", { name: /^Move list/ }),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe("when the API refuses", () => {
   it("says why and reloads the board as the API has it", async () => {
     const { calls } = serve({
