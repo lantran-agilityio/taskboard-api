@@ -25,3 +25,4 @@ Each phase is its own Claude Code session and ends with a committed file.
 | `requirements.md` | Numbered requirements with acceptance criteria | Step 13 |
 | `../prototype/index.html` | Clickable UI prototype with fake data | Step 14 |
 | `build-plan.md` | Requirement → API coverage, gaps, frontend build order | Step 15 |
+| `retrospective.md` | What worked, what the plan got wrong, what to do differently | After step 33 |
